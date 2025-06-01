@@ -1,7 +1,7 @@
 from openpyxl.utils import get_column_letter
 
 # --- CONFIGURATION ---
-EXCEL_FILE = "../data/Top_1000_verbs_French_USE.xlsx"
+EXCEL_FILE = "data/Top_1000_verbs_French_USE.xlsx"
 START_ROW = 3
 VERB_COL = "B"
 STATUS_COL = "AW"
