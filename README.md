@@ -18,11 +18,11 @@ This Streamlit app helps you practice and memorize the conjugations of the 1000 
 french_verb_learning/ <br>
 ├── data/ # --> data input folder with file with "UserInput" and "Solutions" sheets <br>
 ├── data_prep/ # --> preparatory work to get the correct conjugations for the top-1000 verbs <br>
-├── src/ 
+├── src/ <br>
 │ ├── config.py # --> constants and column setup <br>
 │ ├── load_data.py # --> Excel loading helpers <br>
 │ └── select_input.py # --> random task selector <br>
-├── main.py 
+├── main.py <br>
 
 ## 🚀 How to Run
 
