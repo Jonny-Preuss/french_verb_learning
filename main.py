@@ -1,10 +1,3 @@
-import os
-import sys
-
-# print("Working directory:", os.getcwd())
-# Ensure project root is in the Python path
-# sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-
 import streamlit as st
 from src import config as con
 from src import load_data as load
@@ -83,3 +76,4 @@ if st.button("Next verb"):
 # TODO: Allow accent's to be omitted for the word to be correct?
 # TODO: Set possible filters upfront (e.g. only -er/ir/-... verbs, specific tenses, ...)
 # TODO: Display tenses and pronouns not in text form but on some kind of continuum /visual of all possibilities
+# TODO: Not use the English translation as an input, but use it for a hidden field that shows the translation so you can also practice your vocabulary -> potential for a third tab with vocac trainer
