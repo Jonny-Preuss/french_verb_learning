@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from collections import defaultdict
 
 # Load your Excel verb list
-df = pd.read_excel("../data/Top_1000_verbs_French_filled.xlsx", sheet_name="Top1000")
+df = pd.read_excel("Top_1000_verbs_French_empty.xlsx", sheet_name="Top1000")
 verbs = df["French"].dropna().unique()
 
 # Conjugator
@@ -82,5 +82,7 @@ for verb in verbs:
 
 # Final output
 df_out = pd.DataFrame(rows)
+df_out.to_excel("../data/Top_1000_verbs_French_prepared.xlsx", index=False)
 
-df_out.to_excel("../data/flattened_verb_conjugations_v4.xlsx", index=False)
+# TODO: Find out why 14 verbs are not being conjugated (falloir probably is a difficult exception)
+# TODO: Prepare "USE" file automatically with a UserInput and Solution tab, the correct order of columns etc.
