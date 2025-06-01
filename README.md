@@ -43,8 +43,8 @@ french_verb_learning/
 ## ✨ Future Features (Planned)
 
 - Error-tracking log for a quick review of (repeated) mistakes
-- Example sentences per tense/subject/verb to better imagine the verb in use
-- Web-based correctness checking via Le Conjugueur or Reverso to practice agentic tool-use features
+- Request example sentences per tense/subject/verb to better imagine the verb in use (practice LLM calling with a pre-defined prompt on a free tier)
+- Web-based correctness checking via Le Conjugueur or Reverso (practice agentic tool-use features)
 
 ## 📚 License
 

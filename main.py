@@ -50,7 +50,7 @@ else:
         user_input_clean = user_input.strip()
 
         # Save user input to the input sheet
-        cell = ws_input[f"{col}{row}"]
+        cell = ws_input[f"{col}{row}"] # TODO: Check correct cell referencing for UserInput sheet
         cell.value = user_input_clean
 
         # Define fill styles
@@ -59,6 +59,7 @@ else:
 
         # Compare and apply style
         if user_input_clean.lower() == correct_answer.lower():
+            # TODO: Check on past participle correct forms (", ...")
             st.success("✅ Correct!")
             cell.fill = green_fill
         else:
@@ -77,8 +78,8 @@ if st.button("Next verb"):
     st.rerun()
 
 
-# TODO: Commit to Github
 # TODO: Add that the text entry cell empties itself after each try
 # TODO: Add that the correct solution is hidden if the answer was wrong, so you can retry (that needs logging of your wrong answers in a separate script then, that we could display on a second tab)
 # TODO: Allow accent's to be omitted for the word to be correct?
-# TODO: Check on past participle correct forms (", ...")
+# TODO: Set possible filters upfront (e.g. only -er/ir/-... verbs, specific tenses, ...)
+# TODO: Display tenses and pronouns not in text form but on some kind of continuum /visual of all possibilities
