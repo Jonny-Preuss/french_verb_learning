@@ -15,15 +15,15 @@ This Streamlit app helps you practice and memorize the conjugations of the 1000 
 - Supports restarting or moving to the next verb interactively
 
 ## 📁 Project Structure
-french_verb_learning/
-├── data/ # data input folder with file with "UserInput" and "Solutions" sheets
-├── data_prep/ # preparatory work to get the correct conjugations for the top-1000 verbs
-├── notebooks/ # folder for notebook for quick testing
-├── src/ # App modules
-│ ├── config.py # Constants and column setup
-│ ├── load_data.py # Excel loading helpers
-│ └── select_input.py # Random task selector
-├── main.py # Main Streamlit app entry point
+french_verb_learning/ <br>
+├── data/ # data input folder with file with "UserInput" and "Solutions" sheets <br>
+├── data_prep/ # preparatory work to get the correct conjugations for the top-1000 verbs <br>
+├── notebooks/ # folder for notebook for quick testing <br>
+├── src/ # App modules <br>
+│ ├── config.py # Constants and column setup <br>
+│ ├── load_data.py # Excel loading helpers <br>
+│ └── select_input.py # Random task selector <br>
+├── main.py # Main Streamlit app entry point <br>
 
 ## 🚀 How to Run
 
