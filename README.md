@@ -10,6 +10,7 @@ This Streamlit app helps you practice and memorize the conjugations of the 1000 
 - Gives **immediate feedback**:
   - ✅ Correct: Green background
   - ❌ Incorrect: Red background and shows the correct answer
+- Empties the cell input when progressing to the next verb
 - Saves all answers directly into the Excel file
 - Tracks completion status per verb
 - Supports restarting or moving to the next verb interactively

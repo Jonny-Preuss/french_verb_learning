@@ -5,6 +5,27 @@ from src import select_input as input
 from openpyxl.styles import PatternFill
 
 
+# --- COLOUR SCHEME ---
+st.markdown("""
+    <style>
+    div.stButton > button {
+        background-color: #f0f0f0 !important;
+        color: black !important;
+        border: 1px solid #ccc !important;
+        padding: 0.5em 1.2em !important;
+        border-radius: 6px !important;
+        font-size: 1rem !important;
+    }
+
+    div.stButton > button:hover {
+        background-color: #d6e4ff !important;  /* light blue */
+        color: black !important;
+        border-color: #a0c4ff !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+
 # --- MAIN APP ---
 st.title("🇫🇷 French Verb Conjugation Trainer")
 
@@ -27,7 +48,9 @@ else:
     verb = task["verb"]
     prompt = task["prompt"]
 
-print(row)
+if st.session_state.get("clear_input"):
+    st.session_state.user_input = ""
+    st.session_state.clear_input = False
 
 if row is None:
     st.success("🎉 All verbs have been completed!")
@@ -35,7 +58,7 @@ else:
     st.subheader(f"Verb: **{verb}**")
     st.write(f"Conjugate for: **{prompt}**")
 
-    user_input = st.text_input("Your conjugation:")
+    user_input = st.text_input("Your conjugation:", key="user_input")
 
     if st.button("Check answer"):
         # Fetch the correct answer from the solution sheet
@@ -66,12 +89,14 @@ else:
 
         wb.save(con.EXCEL_FILE)
 
+        # ✅ Clear the input field AFTER saving and feedback
+        st.session_state.clear_input = True
+
 if st.button("Next verb"):
     st.session_state.pop("current_task", None)
     st.rerun()
 
 
-# TODO: Add that the text entry cell empties itself after each try
 # TODO: Add that the correct solution is hidden if the answer was wrong, so you can retry (that needs logging of your wrong answers in a separate script then, that we could display on a second tab)
 # TODO: Allow accent's to be omitted for the word to be correct?
 # TODO: Set possible filters upfront (e.g. only -er/ir/-... verbs, specific tenses, ...)
