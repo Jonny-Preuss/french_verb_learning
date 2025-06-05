@@ -29,11 +29,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# --- MAIN APP ---
+# --------- MAIN APP ---------
+
+if "attempts" not in st.session_state:
+    st.session_state.attempts = 0
+
 
 st.title("🇫🇷 French Verb Conjugation Trainer")
 
-wb = load.load_workbook(con.EXCEL_FILE)
+wb = load.safe_load_workbook(con.EXCEL_FILE)
+if wb is None:
+    st.stop()
 ws_input = wb["UserInput"]
 ws_solution = wb["Solutions"]
 
@@ -65,6 +71,8 @@ else:
     user_input = st.text_input("Your conjugation:", key="user_input")
 
     if st.button("Check answer"):
+        st.session_state.attempts += 1
+        
         # Fetch the correct answer from the solution sheet
         correct_answer = str(ws_solution[f"{col}{row}"].value).strip()
         user_input_clean = user_input.strip()
@@ -82,13 +90,25 @@ else:
             # TODO: Check on past participle correct forms (", ...")
             st.success("✅ Correct!")
             cell.fill = green_fill
+            st.session_state.attempts = 0
+
         else:
-            st.error(f"❌ Incorrect. Correct answer: **{correct_answer}**")
+            st.error(f"❌ Incorrect. Try again or reveal answer.")
+            print(correct_answer)
+            print(st.session_state.attempts)
+
+            if st.session_state.attempts >= 1:
+                
+                with st.expander("📖 Show correct answer"):
+                    st.markdown(f"**Correct answer:** `{correct_answer}`")
+
             cell.fill = red_fill
+            # TODO: Retrying incorrect tries empties the input cell, but here we would want to keep it
+
 
             # Append incorrect attempt to log
             log_entry = {
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": datetime.now().strftime("%Y-%m-%d"),
                 "verb": verb,
                 "tense": ws_solution[f"{col}1"].value,
                 "subject": ws_solution[f"{col}2"].value,
@@ -119,8 +139,11 @@ if st.button("Next verb"):
     st.rerun()
 
 
-# TODO: Add that the correct solution is hidden if the answer was wrong, so you can retry (that needs logging of your wrong answers in a separate script then, that we could display on a second tab)
+# TODO: Exclude "auxiliaire" verb from the checks
+# TODO: Add that the correct solution is hidden if the answer was wrong, so you can retry 
 # TODO: Allow accent's to be omitted for the word to be correct?
 # TODO: Set possible filters upfront (e.g. only -er/ir/-... verbs, specific tenses, ...)
 # TODO: Display tenses and pronouns not in text form but on some kind of continuum /visual of all possibilities
 # TODO: Not use the English translation as an input, but use it for a hidden field that shows the translation so you can also practice your vocabulary -> potential for a third tab with vocac trainer
+# TODO: Link to full table of conjugations for given verb?
+# TODO: Audio playback (using an MP3 and st.audio())?
