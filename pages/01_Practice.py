@@ -68,6 +68,11 @@ else:
     st.subheader(f"Verb: **{verb}**")
     st.write(f"Conjugate for: **{prompt}**")
 
+    tense = ws_solution[f"{col}1"].value
+    subject = ws_solution[f"{col}2"].value
+    input.show_conjugation_position(tense, subject)
+
+
     user_input = st.text_input("Your conjugation:", key="user_input")
 
     if st.button("Check answer"):
