@@ -34,8 +34,14 @@ st.markdown("""
 if "attempts" not in st.session_state:
     st.session_state.attempts = 0
 
+if "reset_input" not in st.session_state:
+    st.session_state.reset_input = False
+
+if "last_verb" not in st.session_state:
+    st.session_state.last_verb = None
 
 st.title("🇫🇷 French Verb Conjugation Trainer")
+
 
 wb = load.safe_load_workbook(con.EXCEL_FILE)
 if wb is None:
@@ -58,9 +64,10 @@ else:
     verb = task["verb"]
     prompt = task["prompt"]
 
-if st.session_state.get("clear_input"):
-    st.session_state.user_input = ""
-    st.session_state.clear_input = False
+# If the verb has changed, trigger input reset
+if verb != st.session_state.last_verb:
+    st.session_state.reset_input = True
+    st.session_state.last_verb = verb
 
 if row is None:
     st.success("🎉 All verbs have been completed!")
@@ -73,14 +80,35 @@ else:
     input.show_conjugation_position(tense, subject)
 
 
-    user_input = st.text_input("Your conjugation:", key="user_input")
+    # if st.session_state.reset_input:
+    #     if "user_input" in st.session_state:
+    #         del st.session_state["user_input"]
+    #     st.session_state.reset_input = False  # ✅ Reset the flag after deletion
+
+    # Render input field, showing previous value unless reset_input is True
+    # if st.session_state.get("reset_input", False):
+    #     user_input = st.text_input("Your conjugation:", value="", key="user_input_temp")
+    #     st.session_state["user_input"] = ""
+    #     st.session_state.reset_input = False
+    # else:
+    #     user_input = st.text_input("Your conjugation:", key="user_input")
+
+    user_input = st.text_input("Your conjugation:", key=f"user_input_{verb}")
+
+
+    # user_input = st.text_input("Your conjugation:", key=f"user_input_{verb}")
+
+    
+
 
     if st.button("Check answer"):
         st.session_state.attempts += 1
+
+        # user_input_clean = st.session_state.get("user_input", "").strip() # capture immediately
+        user_input_clean = user_input.strip() # capture immediately
         
         # Fetch the correct answer from the solution sheet
         correct_answer = str(ws_solution[f"{col}{row}"].value).strip()
-        user_input_clean = user_input.strip()
 
         # Save user input to the input sheet
         cell = ws_input[f"{col}{row}"] # TODO: Check correct cell referencing for UserInput sheet
@@ -96,6 +124,8 @@ else:
             st.success("✅ Correct!")
             cell.fill = green_fill
             st.session_state.attempts = 0
+            st.session_state.reset_input = True
+            
 
         else:
             st.error(f"❌ Incorrect. Try again or reveal answer.")
@@ -136,19 +166,18 @@ else:
 
         wb.save(con.EXCEL_FILE)
 
-        # ✅ Clear the input field AFTER saving and feedback
+        # # ✅ Clear the input field AFTER saving and feedback
         st.session_state.clear_input = True
 
 if st.button("Next verb"):
     st.session_state.pop("current_task", None)
+    st.session_state.reset_input = True  # ✅ sets flag
     st.rerun()
 
 
 # TODO: Exclude "auxiliaire" verb from the checks
-# TODO: Add that the correct solution is hidden if the answer was wrong, so you can retry 
 # TODO: Allow accent's to be omitted for the word to be correct?
 # TODO: Set possible filters upfront (e.g. only -er/ir/-... verbs, specific tenses, ...)
-# TODO: Display tenses and pronouns not in text form but on some kind of continuum /visual of all possibilities
 # TODO: Not use the English translation as an input, but use it for a hidden field that shows the translation so you can also practice your vocabulary -> potential for a third tab with vocac trainer
 # TODO: Link to full table of conjugations for given verb?
 # TODO: Audio playback (using an MP3 and st.audio())?
