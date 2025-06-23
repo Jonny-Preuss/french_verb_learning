@@ -14,6 +14,7 @@ This Streamlit app helps you practice and memorize the conjugations of the 1000 
 - Saves all answers directly into the Excel file
 - Tracks completion status per verb
 - Supports restarting or moving to the next verb interactively
+- Error-tracking log for a quick review of (repeated) mistakes
 
 ## 📁 Project Structure
 french_verb_learning/ <br>
@@ -42,7 +43,6 @@ french_verb_learning/ <br>
 
 ## ✨ Future Features (Planned)
 
-- Error-tracking log for a quick review of (repeated) mistakes
 - Request example sentences per tense/subject/verb to better imagine the verb in use (practice LLM calling with a pre-defined prompt on a free tier)
 - Web-based correctness checking via Le Conjugueur or Reverso (practice agentic tool-use features)
 
