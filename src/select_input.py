@@ -14,9 +14,10 @@ def get_random_task(ws):
     col = random.choice(con.CONJUGATION_COLS)
 
     verb = ws[f"{con.VERB_COL}{row}"].value
+    translation = ws[f"{con.TRANSLATION_COL}{row}"].value
     tense = ws[f"{col}1"].value
     subject = ws[f"{col}2"].value
-    return row, col, verb, f"{tense} — {subject}"
+    return row, col, verb, f"{tense} — {subject}", translation
 
 
 

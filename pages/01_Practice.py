@@ -50,12 +50,13 @@ ws_solution = wb["Solutions"]
 
 # --------- TASK SETUP ---------
 if "current_task" not in st.session_state:
-    row, col, verb, prompt = input.get_random_task(ws_solution)
+    row, col, verb, prompt, translation = input.get_random_task(ws_solution)
     st.session_state.current_task = {
         "row": row,
         "col": col,
         "verb": verb,
-        "prompt": prompt
+        "prompt": prompt,
+        "translation": translation
     }
 else:
     task = st.session_state.current_task
@@ -63,6 +64,7 @@ else:
     col = task["col"]
     verb = task["verb"]
     prompt = task["prompt"]
+    translation = task["translation"]
 
 # If the verb has changed, trigger input reset
 if verb != st.session_state.last_verb:
@@ -78,8 +80,17 @@ else:
 
     tense = ws_solution[f"{col}1"].value
     subject = ws_solution[f"{col}2"].value
+    # translation = ws_solution[f"{con.TRANSLATION_COL}"].value
+    print(translation)
+
+    # Show translation
+    with st.expander("📘 Translation", expanded=False):
+        st.markdown(f"**{translation}**")
+
+    # Show plotly diagram of tense and personal pronoun    
     input.show_conjugation_position(tense, subject)
 
+    # Show user input field
     user_input = st.text_input("Your conjugation:", key=f"user_input_{verb}")
 
 
@@ -126,7 +137,6 @@ if st.button("Next verb"):
     st.rerun()
 
 
-# TODO: Not use the English translation as an input, but use it for an expandable field that shows the translation so you can also practice your vocabulary 
 # TODO: Allow accent's to be omitted for the word to be correct? (e.g. with unidecode library)
 # TODO: Set possible filters upfront (e.g. only -er/ir/-... verbs, specific tenses, ...)
 # TODO: Set option of different modes: random verb and form / go through verb one by one in all forms / go through one tense entirely for a verb but only that one tense (and show all personal pronouns at once with input fields)
