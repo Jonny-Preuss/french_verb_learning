@@ -79,26 +79,7 @@ else:
     subject = ws_solution[f"{col}2"].value
     input.show_conjugation_position(tense, subject)
 
-
-    # if st.session_state.reset_input:
-    #     if "user_input" in st.session_state:
-    #         del st.session_state["user_input"]
-    #     st.session_state.reset_input = False  # ✅ Reset the flag after deletion
-
-    # Render input field, showing previous value unless reset_input is True
-    # if st.session_state.get("reset_input", False):
-    #     user_input = st.text_input("Your conjugation:", value="", key="user_input_temp")
-    #     st.session_state["user_input"] = ""
-    #     st.session_state.reset_input = False
-    # else:
-    #     user_input = st.text_input("Your conjugation:", key="user_input")
-
     user_input = st.text_input("Your conjugation:", key=f"user_input_{verb}")
-
-
-    # user_input = st.text_input("Your conjugation:", key=f"user_input_{verb}")
-
-    
 
 
     if st.button("Check answer"):
@@ -175,9 +156,22 @@ if st.button("Next verb"):
     st.rerun()
 
 
-# TODO: Exclude "auxiliaire" verb from the checks
-# TODO: Allow accent's to be omitted for the word to be correct?
+# TODO: Split main file into more functions (e.g. check_answer, log_error, reset_input)
+# TODO: Exclude "auxiliaire" verb from the checks or fix their structure
+# TODO: Not use the English translation as an input, but use it for an expandable field that shows the translation so you can also practice your vocabulary 
+# TODO: Allow accent's to be omitted for the word to be correct? (e.g. with unidecode library)
 # TODO: Set possible filters upfront (e.g. only -er/ir/-... verbs, specific tenses, ...)
-# TODO: Not use the English translation as an input, but use it for a hidden field that shows the translation so you can also practice your vocabulary -> potential for a third tab with vocac trainer
+# TODO: Set option of different modes: random verb and form or go through verb one by one
+# TODO: Should previously wrong answers be overwritten? Excluded from future runs? Excluded unless you do X?
+# TODO: Check if a word has been "learned" if all inputs in the UserInput Sheet are correct and then mark it as TRUE (boolean) and not "True"
+# TODO: Show progress (e.g. "50/1000 verbs completed")
+
+
+# Shipping:
+# TODO: Include a user feedback field
+
+
+# Further Ideas:
 # TODO: Link to full table of conjugations for given verb?
 # TODO: Audio playback (using an MP3 and st.audio())?
+# TODO: A third tab with vocab trainer?
