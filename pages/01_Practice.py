@@ -2,6 +2,9 @@ import streamlit as st
 from src import config as con
 from src import load_data as load
 from src import select_input as input
+from src.session import init_session_state 
+from src.checking import check_user_input
+from src.logging_attempts import log_incorrect_attempt
 from openpyxl.styles import PatternFill
 from datetime import datetime
 import pandas as pd
@@ -31,24 +34,21 @@ st.markdown("""
 
 # --------- MAIN APP ---------
 
-if "attempts" not in st.session_state:
-    st.session_state.attempts = 0
+init_session_state()
 
-if "reset_input" not in st.session_state:
-    st.session_state.reset_input = False
-
-if "last_verb" not in st.session_state:
-    st.session_state.last_verb = None
-
+# --------- APP TITLE ---------
 st.title("🇫🇷 French Verb Conjugation Trainer")
 
 
+# --------- LOAD WORKBOOK ---------
 wb = load.safe_load_workbook(con.EXCEL_FILE)
 if wb is None:
     st.stop()
 ws_input = wb["UserInput"]
 ws_solution = wb["Solutions"]
 
+
+# --------- TASK SETUP ---------
 if "current_task" not in st.session_state:
     row, col, verb, prompt = input.get_random_task(ws_solution)
     st.session_state.current_task = {
@@ -69,6 +69,7 @@ if verb != st.session_state.last_verb:
     st.session_state.reset_input = True
     st.session_state.last_verb = verb
 
+# --------- UI + LOGIC ---------
 if row is None:
     st.success("🎉 All verbs have been completed!")
 else:
@@ -84,61 +85,30 @@ else:
 
     if st.button("Check answer"):
         st.session_state.attempts += 1
-
-        # user_input_clean = st.session_state.get("user_input", "").strip() # capture immediately
-        user_input_clean = user_input.strip() # capture immediately
         
         # Fetch the correct answer from the solution sheet
         correct_answer = str(ws_solution[f"{col}{row}"].value).strip()
 
         # Save user input to the input sheet
         cell = ws_input[f"{col}{row}"] # TODO: Check correct cell referencing for UserInput sheet
-        cell.value = user_input_clean
 
-        # Define fill styles
-        green_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
-        red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+        is_correct, cleaned_input = check_user_input(user_input, correct_answer, cell)
 
         # Compare and apply style
-        if user_input_clean.lower() == correct_answer.lower():
-            # TODO: Check on past participle correct forms (", ...")
+        if is_correct:
             st.success("✅ Correct!")
-            cell.fill = green_fill
             st.session_state.attempts = 0
             st.session_state.reset_input = True
             
 
         else:
             st.error(f"❌ Incorrect. Try again or reveal answer.")
-            print(correct_answer)
-            print(st.session_state.attempts)
-
             if st.session_state.attempts >= 1:
-                
                 with st.expander("📖 Show correct answer"):
                     st.markdown(f"**Correct answer:** `{correct_answer}`")
 
-            cell.fill = red_fill
             # TODO: Retrying incorrect tries empties the input cell, but here we would want to keep it
-
-
-            # Append incorrect attempt to log
-            log_entry = {
-                "timestamp": datetime.now().strftime("%Y-%m-%d"),
-                "verb": verb,
-                "tense": ws_solution[f"{col}1"].value,
-                "subject": ws_solution[f"{col}2"].value,
-                "user_input": user_input_clean,
-                "correct_answer": correct_answer
-            }
-
-            log_df = pd.DataFrame([log_entry])
-            log_path = "error_log.csv"
-
-            if os.path.exists(log_path):
-                log_df.to_csv(log_path, mode="a", header=False, index=False)
-            else:
-                log_df.to_csv(log_path, mode="w", header=True, index=False)
+            log_incorrect_attempt(verb, tense, subject, user_input, correct_answer, log_path="error_log.csv")
 
         # Check if full row is complete
         filled = all(ws_input[f"{c}{row}"].value not in [None, ""] for c in con.CONJUGATION_COLS)
@@ -156,22 +126,27 @@ if st.button("Next verb"):
     st.rerun()
 
 
-# TODO: Split main file into more functions (e.g. check_answer, log_error, reset_input)
-# TODO: Exclude "auxiliaire" verb from the checks or fix their structure
 # TODO: Not use the English translation as an input, but use it for an expandable field that shows the translation so you can also practice your vocabulary 
 # TODO: Allow accent's to be omitted for the word to be correct? (e.g. with unidecode library)
 # TODO: Set possible filters upfront (e.g. only -er/ir/-... verbs, specific tenses, ...)
-# TODO: Set option of different modes: random verb and form or go through verb one by one
-# TODO: Should previously wrong answers be overwritten? Excluded from future runs? Excluded unless you do X?
+# TODO: Set option of different modes: random verb and form / go through verb one by one in all forms / go through one tense entirely for a verb but only that one tense (and show all personal pronouns at once with input fields)
 # TODO: Check if a word has been "learned" if all inputs in the UserInput Sheet are correct and then mark it as TRUE (boolean) and not "True"
 # TODO: Show progress (e.g. "50/1000 verbs completed")
+# TODO: Show example/practice sentences
+
+# WRITEBACK:
+# TODO: Fill (by hand!) remaining empty cells in the Excel tab "Solutions"
+# TODO: Fix that the wrong answer is written back to the wrong cell in Excel somehow...
+# TODO: Should previously wrong answers be overwritten? Excluded from future runs? Excluded unless you do X?
 
 
-# Shipping:
+# SHIPPING:
 # TODO: Include a user feedback field
+# TODO: Write user signup
+# TODO: Write docker file
 
 
-# Further Ideas:
+# FURTHER IDEAS:
 # TODO: Link to full table of conjugations for given verb?
 # TODO: Audio playback (using an MP3 and st.audio())?
-# TODO: A third tab with vocab trainer?
+# TODO: A third tab with vocab trainer? You could for example add a button on the Practice tab that adds a word to the vocab trainer with translation

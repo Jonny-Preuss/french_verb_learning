@@ -4,9 +4,11 @@ from openpyxl.utils import get_column_letter
 EXCEL_FILE = "data/Top_1000_verbs_French_USE.xlsx"
 START_ROW = 3
 VERB_COL = "B"
+TRANSLATION_COL = "C"
+FILTER_COL = "F"
 STATUS_COL = "AW"
-# CONJUGATION_COLS = list(map(chr, range(ord("C"), ord("AV"))))  # Columns C to AU
-CONJUGATION_COLS = [get_column_letter(i) for i in range(3, 48)]  # Columns C (3) to AU (47)
+# CONJUGATION_COLS = list(map(chr, range(ord("G"), ord("AV"))))  # Columns G to AU
+CONJUGATION_COLS = [get_column_letter(i) for i in range(5, 48)]  # Columns G (3) to AV (47)
 
 # ---- COLOUR SCHEME ------
 base = "light"
