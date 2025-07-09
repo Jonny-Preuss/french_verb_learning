@@ -55,15 +55,23 @@ for r in range(con.START_ROW, ws_solution.max_row + 1):
     if val: filter_options.add(val.strip())
 
 filter_options = sorted(filter_options)
-selected_filter = st.selectbox("🔍 Filter by verb group:", ["(All)"] + filter_options)
+with st.sidebar:
+    selected_filter = st.radio("🔍 Filter by verb group:", ["(All)"] + filter_options, horizontal=False)
 
-# Save to session state (optional but good for clarity)
-st.session_state["selected_filter"] = selected_filter
+# Reset task if filter changes
+if "last_filter" not in st.session_state:
+    st.session_state["last_filter"] = selected_filter
+
+if selected_filter != st.session_state["last_filter"]:
+    st.session_state["last_filter"] = selected_filter
+    st.session_state.pop("current_task", None)
+    st.session_state.reset_input = True
+    st.rerun()
 
 
 # --------- TASK SETUP ---------
 if "current_task" not in st.session_state:
-    row, col, verb, prompt, translation = input.get_random_task(ws_solution, selected_filter=st.session_state["selected_filter"])
+    row, col, verb, prompt, translation = input.get_random_task(ws_solution, selected_filter)
     st.session_state.current_task = {
         "row": row,
         "col": col,

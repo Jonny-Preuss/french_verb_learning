@@ -7,7 +7,14 @@ VERB_COL = "B"
 TRANSLATION_COL = "C"
 FILTER_COL = "F"
 STATUS_COL = "AW"
-CONJUGATION_COLS = [get_column_letter(i) for i in range(5, 48)]  # Columns G (3) to AV (47)
+CONJUGATION_COLS = [get_column_letter(i) for i in range(5, 48)]  # Columns G to AV
+PRESENT_COLS = [get_column_letter(i) for i in range(14, 20)]  # Columns O to T
+IMPARFAIT_COLS = [get_column_letter(i) for i in range(20, 26)]  # Columns U to Z
+FUTUR_COLS = [get_column_letter(i) for i in range(27, 33)]  # Columns AB to AG
+SUBJONCTIF_COLS = [get_column_letter(i) for i in range(34, 40)]  # Columns AI to AN
+CONDITIONNEL_COLS = [get_column_letter(i) for i in range(41, 47)]  # Columns AP to AU
+IMPERATIF_COLS = [get_column_letter(i) for i in range(11, 14)]  # Columns L to N
+OTHER_COLS = ["G", "H", "I", "J", "K", "AA", "AH", "AO", "AV"]
 
 # ---- COLOUR SCHEME ------
 base = "light"
