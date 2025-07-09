@@ -15,6 +15,9 @@ This Streamlit app helps you practice and memorize the conjugations of the 1000 
 - Tracks completion status per verb
 - Supports restarting or moving to the next verb interactively
 - Error-tracking log for a quick review of (repeated) mistakes
+- Not use the English translation as an input, but use it for an expandable field that shows the translation so you can also practice your vocabulary 
+- Set possible filters upfront (e.g. only verbs of the 1st/2nd/3rd group, specific tenses, ...)
+
 
 ## 📁 Project Structure
 french_verb_learning/ <br>

@@ -48,9 +48,22 @@ ws_input = wb["UserInput"]
 ws_solution = wb["Solutions"]
 
 
+# --- FILTER UI BELOW TITLE ---
+filter_options = set()
+for r in range(con.START_ROW, ws_solution.max_row + 1):
+    val = ws_solution[f"{con.FILTER_COL}{r}"].value
+    if val: filter_options.add(val.strip())
+
+filter_options = sorted(filter_options)
+selected_filter = st.selectbox("🔍 Filter by verb group:", ["(All)"] + filter_options)
+
+# Save to session state (optional but good for clarity)
+st.session_state["selected_filter"] = selected_filter
+
+
 # --------- TASK SETUP ---------
 if "current_task" not in st.session_state:
-    row, col, verb, prompt, translation = input.get_random_task(ws_solution)
+    row, col, verb, prompt, translation = input.get_random_task(ws_solution, selected_filter=st.session_state["selected_filter"])
     st.session_state.current_task = {
         "row": row,
         "col": col,
@@ -138,7 +151,6 @@ if st.button("Next verb"):
 
 
 # TODO: Allow accent's to be omitted for the word to be correct? (e.g. with unidecode library)
-# TODO: Set possible filters upfront (e.g. only -er/ir/-... verbs, specific tenses, ...)
 # TODO: Set option of different modes: random verb and form / go through verb one by one in all forms / go through one tense entirely for a verb but only that one tense (and show all personal pronouns at once with input fields)
 # TODO: Check if a word has been "learned" if all inputs in the UserInput Sheet are correct and then mark it as TRUE (boolean) and not "True"
 # TODO: Show progress (e.g. "50/1000 verbs completed")

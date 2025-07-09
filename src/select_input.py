@@ -4,9 +4,21 @@ import plotly.graph_objects as go
 import streamlit as st
 
 # --- SELECT RANDOM VERB AND COLUMN ---
-def get_random_task(ws):
+def get_random_task(ws, selected_filter=None):
     rows = range(con.START_ROW, ws.max_row + 1)
-    available_rows = [r for r in rows if str(ws[f"{con.STATUS_COL}{r}"].value).strip().lower() != "true"]
+    available_rows = []
+    for r in rows:
+        status = str(ws[f"{con.STATUS_COL}{r}"].value).strip().lower()
+        if status == "true":
+            continue
+
+        filter_value = ws[f"{con.FILTER_COL}{r}"].value
+        if selected_filter and selected_filter != "(All)":
+            if not filter_value or filter_value.strip() != selected_filter:
+                continue
+
+        available_rows.append(r)
+
     if not available_rows:
         return None, None, None, None
 
