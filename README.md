@@ -34,12 +34,14 @@ french_verb_learning/ <br>
 1. 📦 **Install dependencies** (ideally in a virtualenv or conda environment):
 
    ```bash
-   pip install streamlit pandas openpyxl
+   pip install streamlit pandas openpyxl 
+   ```
 
 2. ▶️ Run the app:
 
     ```bash
-    streamlit run main.py
+    streamlit run main.py 
+    ```
 
 3. 🎯 Follow the on-screen prompts to start conjugating!
 
