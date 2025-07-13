@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 # --- SELECT RANDOM VERB AND COLUMN ---
-def get_random_task(ws, selected_filter=None):
+def get_random_task(ws, selected_filter=None, allowed_cols=None):
     rows = range(con.START_ROW, ws.max_row + 1)
     available_rows = []
     for r in rows:
@@ -23,6 +23,7 @@ def get_random_task(ws, selected_filter=None):
         return None, None, None, None
 
     row = random.choice(available_rows)
+    columns_to_choose_from = allowed_cols if allowed_cols else con.CONJUGATION_COLS
     col = random.choice(con.CONJUGATION_COLS)
 
     verb = ws[f"{con.VERB_COL}{row}"].value

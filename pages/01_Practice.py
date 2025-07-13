@@ -31,10 +31,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-
 # --------- MAIN APP ---------
-
 init_session_state()
+
 
 # --------- APP TITLE ---------
 st.title("🇫🇷 French Verb Conjugation Trainer")
@@ -48,7 +47,7 @@ ws_input = wb["UserInput"]
 ws_solution = wb["Solutions"]
 
 
-# --- FILTER UI BELOW TITLE ---
+# --- FILTER UI SIDEBAR ---
 filter_options = set()
 for r in range(con.START_ROW, ws_solution.max_row + 1):
     val = ws_solution[f"{con.FILTER_COL}{r}"].value
@@ -58,20 +57,68 @@ filter_options = sorted(filter_options)
 with st.sidebar:
     selected_filter = st.radio("🔍 Filter by verb group:", ["(All)"] + filter_options, horizontal=False)
 
+    st.markdown("---")
+
+    if st.checkbox("Select all tenses", key="all_tenses"):
+        print("ALL TENSES SELECTED")
+        selected_tenses = list(con.TENSES.keys())
+        
+    selected_tenses = st.multiselect(
+        "⏱️ Filter by tense:",
+        options=list(con.TENSES.keys()),
+        default=["Présent"]
+    )
+    print(selected_tenses)
+
+    # Flatten the selected columns
+    selected_cols = [col for tense in selected_tenses for col in con.TENSES[tense]]
+    print(selected_cols)
+    print(st.session_state)
+
+
 # Reset task if filter changes
 if "last_filter" not in st.session_state:
     st.session_state["last_filter"] = selected_filter
 
-if selected_filter != st.session_state["last_filter"]:
+# if selected_filter != st.session_state["last_filter"]:
+#     st.session_state["last_filter"] = selected_filter
+#     st.session_state.pop("current_task", None)
+#     st.session_state.reset_input = True
+#     st.rerun()
+
+if "last_filter" not in st.session_state:
     st.session_state["last_filter"] = selected_filter
+
+# If the tense selection changed, reset current task
+if "last_tense_selection" not in st.session_state:
+    print("last_tense_selected not in st.session_state")
+    st.session_state["last_tense_selection"] = selected_tenses
+    print(selected_tenses)
+# if selected_tenses != st.session_state["last_tense_selection"]:
+#     print("selected_tenses not equal to session_state")
+#     st.session_state["last_tense_selection"] = selected_tenses
+#     st.session_state.pop("current_task", None)
+#     st.session_state.reset_input = True
+#     st.rerun()
+#     print(selected_tenses)
+
+if (
+    selected_filter != st.session_state["last_filter"]
+    or selected_tenses != st.session_state["last_tense_selection"]
+):
+    print("WE HERE YALL")
+    st.session_state["last_filter"] = selected_filter
+    st.session_state["last_tense_selection"] = selected_tenses
     st.session_state.pop("current_task", None)
     st.session_state.reset_input = True
     st.rerun()
 
 
+
+
 # --------- TASK SETUP ---------
 if "current_task" not in st.session_state:
-    row, col, verb, prompt, translation = input.get_random_task(ws_solution, selected_filter)
+    row, col, verb, prompt, translation = input.get_random_task(ws_solution, selected_filter, selected_cols)
     st.session_state.current_task = {
         "row": row,
         "col": col,
