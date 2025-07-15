@@ -11,7 +11,8 @@ import pandas as pd
 import os
 
 
-# --- COLOUR SCHEME --------
+# --- COLOUR SCHEME & STYLE --------
+# st.set_page_config(layout="wide")
 st.markdown("""
     <style>
     div.stButton > button {
@@ -56,59 +57,30 @@ for r in range(con.START_ROW, ws_solution.max_row + 1):
 filter_options = sorted(filter_options)
 with st.sidebar:
     selected_filter = st.radio("🔍 Filter by verb group:", ["(All)"] + filter_options, horizontal=False)
-
     st.markdown("---")
-
-    if st.checkbox("Select all tenses", key="all_tenses"):
-        print("ALL TENSES SELECTED")
-        selected_tenses = list(con.TENSES.keys())
-        
-    selected_tenses = st.multiselect(
-        "⏱️ Filter by tense:",
-        options=list(con.TENSES.keys()),
-        default=["Présent"]
+    selected_tense = st.multiselect(
+        "🎯 Filter by tense:",
+        con.TENSE_OPTIONS,
+        default=["(Random)"]
     )
-    print(selected_tenses)
 
-    # Flatten the selected columns
-    selected_cols = [col for tense in selected_tenses for col in con.TENSES[tense]]
-    print(selected_cols)
-    print(st.session_state)
+    # Remove the random option when other tenses are selected
+    if "(Random)" in selected_tense and len(selected_tense) > 1:
+        selected_tense = [t for t in selected_tense if t != "(Random)"]
+
+    selected_tense = selected_tense or ["(Random)"]
 
 
 # Reset task if filter changes
 if "last_filter" not in st.session_state:
     st.session_state["last_filter"] = selected_filter
+if "last_tense" not in st.session_state:
+    st.session_state["last_tense"] = selected_tense
 
 # if selected_filter != st.session_state["last_filter"]:
-#     st.session_state["last_filter"] = selected_filter
-#     st.session_state.pop("current_task", None)
-#     st.session_state.reset_input = True
-#     st.rerun()
-
-if "last_filter" not in st.session_state:
+if (selected_filter != st.session_state["last_filter"]) or (selected_tense != st.session_state["last_tense"]):
     st.session_state["last_filter"] = selected_filter
-
-# If the tense selection changed, reset current task
-if "last_tense_selection" not in st.session_state:
-    print("last_tense_selected not in st.session_state")
-    st.session_state["last_tense_selection"] = selected_tenses
-    print(selected_tenses)
-# if selected_tenses != st.session_state["last_tense_selection"]:
-#     print("selected_tenses not equal to session_state")
-#     st.session_state["last_tense_selection"] = selected_tenses
-#     st.session_state.pop("current_task", None)
-#     st.session_state.reset_input = True
-#     st.rerun()
-#     print(selected_tenses)
-
-if (
-    selected_filter != st.session_state["last_filter"]
-    or selected_tenses != st.session_state["last_tense_selection"]
-):
-    print("WE HERE YALL")
-    st.session_state["last_filter"] = selected_filter
-    st.session_state["last_tense_selection"] = selected_tenses
+    st.session_state["last_tense"] = selected_tense
     st.session_state.pop("current_task", None)
     st.session_state.reset_input = True
     st.rerun()
@@ -118,7 +90,12 @@ if (
 
 # --------- TASK SETUP ---------
 if "current_task" not in st.session_state:
-    row, col, verb, prompt, translation = input.get_random_task(ws_solution, selected_filter, selected_cols)
+    tense_filter = [t for t in selected_tense if t != "(Random)"]
+    row, col, verb, prompt, translation = input.get_random_task(
+        ws_solution,
+        selected_filter,
+        tense_filter if tense_filter else None,
+    )
     st.session_state.current_task = {
         "row": row,
         "col": col,
@@ -208,7 +185,7 @@ if st.button("Next verb"):
 # TODO: Allow accent's to be omitted for the word to be correct? (e.g. with unidecode library)
 # TODO: Set option of different modes: random verb and form / go through verb one by one in all forms / go through one tense entirely for a verb but only that one tense (and show all personal pronouns at once with input fields)
 # TODO: Check if a word has been "learned" if all inputs in the UserInput Sheet are correct and then mark it as TRUE (boolean) and not "True"
-# TODO: Show progress (e.g. "50/1000 verbs completed")
+# TODO: Show progress (e.g. "50/1000 verbs completed") and a score of this session/today/always
 # TODO: Show example/practice sentences
 
 # WRITEBACK:
@@ -227,3 +204,4 @@ if st.button("Next verb"):
 # TODO: Link to full table of conjugations for given verb?
 # TODO: Audio playback (using an MP3 and st.audio())?
 # TODO: A third tab with vocab trainer? You could for example add a button on the Practice tab that adds a word to the vocab trainer with translation
+# TODO: Use database instead of Excel as backend

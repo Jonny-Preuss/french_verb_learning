@@ -16,15 +16,16 @@ primaryColor = "#1f77b4"  # Streamlit's default blue
 
 
 # ---- TENSE MAPPING ----
-PRESENT_COLS = [get_column_letter(i) for i in range(14, 20)]  # Columns O to T
-IMPARFAIT_COLS = [get_column_letter(i) for i in range(20, 26)]  # Columns U to Z
-FUTUR_COLS = [get_column_letter(i) for i in range(27, 33)]  # Columns AB to AG
-SUBJONCTIF_COLS = [get_column_letter(i) for i in range(34, 40)]  # Columns AI to AN
-CONDITIONNEL_COLS = [get_column_letter(i) for i in range(41, 47)]  # Columns AP to AU
-IMPERATIF_COLS = [get_column_letter(i) for i in range(11, 14)]  # Columns L to N
+PRESENT_COLS = [get_column_letter(i) for i in range(15, 21)]  # Columns O to T
+IMPARFAIT_COLS = [get_column_letter(i) for i in range(21, 27)]  # Columns U to Z
+FUTUR_COLS = [get_column_letter(i) for i in range(28, 34)]  # Columns AB to AG
+SUBJONCTIF_COLS = [get_column_letter(i) for i in range(35, 41)]  # Columns AI to AN
+CONDITIONNEL_COLS = [get_column_letter(i) for i in range(42, 48)]  # Columns AP to AU
+IMPERATIF_COLS = [get_column_letter(i) for i in range(12, 15)]  # Columns L to N
 OTHER_COLS = ["G", "H", "I", "J", "K", "AA", "AH", "AO", "AV"]
 
-TENSES = {
+TENSE_COL_MAP = {
+    # "All": CONJUGATION_COLS,
     "Présent": PRESENT_COLS,
     "Imparfait": IMPARFAIT_COLS,
     "Futur": FUTUR_COLS,
@@ -33,3 +34,5 @@ TENSES = {
     "Impératif": IMPERATIF_COLS,
     "Autres": OTHER_COLS,
 }
+
+TENSE_OPTIONS = ["(Random)"] + list(TENSE_COL_MAP.keys())
