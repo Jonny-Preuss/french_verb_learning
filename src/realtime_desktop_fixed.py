@@ -159,6 +159,9 @@ async def realtime_session(args):
                     expecting_audio = False
                     awaiting_response = False
 
+                elif t == "input_audio_buffer.committed":
+                    print("[server] input_audio_buffer committed:", msg.get("item_id"))
+
                 elif t.startswith("response."):
                     print("[debug]", t, msg)
 

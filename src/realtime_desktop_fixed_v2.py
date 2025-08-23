@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 Desktop Realtime Voice (Push-to-Talk) for OpenAI Realtime API (Fixed)
@@ -8,14 +9,14 @@ Desktop Realtime Voice (Push-to-Talk) for OpenAI Realtime API (Fixed)
 - Guards against empty/too-short audio commits
 """
 
-import asyncio, base64, json, os, sys, threading, getpass, queue, signal, argparse, inspect
+import asyncio, base64, json, os, sys, threading, getpass, queue, signal, argparse, time
 import numpy as np
 import sounddevice as sd
 import websockets
 
 DEFAULT_MODEL = os.getenv("OPENAI_REALTIME_MODEL", "gpt-4o-realtime-preview")
 DEFAULT_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "verse")
-DEFAULT_SR    = int(os.getenv("OPENAI_REALTIME_SR", "24000"))
+DEFAULT_SR    = int(os.getenv("OPENAI_REALTIME_SR", "16000"))
 
 def get_api_key():
     key = os.getenv("OPENAI_API_KEY")
@@ -75,25 +76,12 @@ class MicStream:
         self.q.put_nowait(bytes(indata))
 
     def start(self):
-        try:
-            # Validate device/sample-rate first (helps catch 24 kHz issues)
-            sd.check_input_settings(device=self.device, samplerate=self.sr, channels=1, dtype='int16')
-        except Exception as e:
-            print(f"[mic] input settings invalid: {e}")
-            print("[mic] tip: run with --input-device <index> (see sd.query_devices())")
-            raise
-
-        try:
-            self.stream = sd.RawInputStream(
-                samplerate=self.sr, channels=1, dtype='int16',
-                callback=self._cb, blocksize=int(self.sr*0.02),  # 20ms
-                device=self.device
-            )
-            self.stream.start()
-            print(f"[mic] started at {self.sr} Hz on device={self.device}")
-        except Exception as e:
-            print(f"[mic] failed to start stream: {e}")
-            raise
+        self.stream = sd.RawInputStream(
+            samplerate=self.sr, channels=1, dtype='int16',
+            callback=self._cb, blocksize=int(self.sr*0.02),  # 20ms
+            device=self.device
+        )
+        self.stream.start()
 
     def stop(self):
         if self.stream:
@@ -116,21 +104,15 @@ async def realtime_session(args):
         stop_flag["stop"] = True
     signal.signal(signal.SIGINT, _sigint)
 
-    # websockets changed the connect() signature in v15, so support both.
-    connect_kwargs = {"ping_interval": 20}
-    params = inspect.signature(websockets.connect).parameters
-    header_arg = "additional_headers" if "additional_headers" in params else "extra_headers"
-    connect_kwargs[header_arg] = headers
-
-    async with websockets.connect(url, **connect_kwargs) as ws:
+    # websockets v15+ uses additional_headers
+    async with websockets.connect(url, additional_headers=headers, ping_interval=20) as ws:
         # Configure session
         await ws.send(json.dumps({
             "type": "session.update",
             "session": {
                 "voice": args.voice,
-                "input_audio_format":  "pcm16",
+                "input_audio_format": "pcm16",
                 "output_audio_format": "pcm16",
-                "turn_detection": None,
                 "instructions": args.system_prompt,
             },
         }))
@@ -146,51 +128,54 @@ async def realtime_session(args):
         audio_buf = bytearray()
         captured_ms = 0
         awaiting_response = False
+        last_enter = 0.0
+        send_lock = asyncio.Lock()
 
         async def recv_loop():
             nonlocal expecting_audio, awaiting_response
-            audio_chunks = []
+            current_chunks = []
             while True:
                 msg_raw = await ws.recv()
                 if isinstance(msg_raw, (bytes, bytearray)):
                     continue
                 msg = json.loads(msg_raw)
-                t = msg.get("type","")
+                t = msg.get("type")
 
                 if t == "error":
                     err = msg.get("error", {})
-                    if err.get("code") == "response_cancel_not_active":
+                    code = err.get("code")
+                    if code == "response_cancel_not_active":
                         continue
-                    print(f"[error] {msg}", flush=True)
-                    continue
+                    print(f"[error] {msg}", file=sys.stderr)
 
-                # AUDIO
-                if t in ("response.output_audio.delta", "response.audio.delta", "output_audio.delta"):
+                elif t == "output_audio.delta":
                     expecting_audio = True
-                    b64 = msg.get("audio")
-                    if b64: audio_chunks.append(base64.b64decode(b64))
-                    continue
-                if t in ("response.output_audio.done", "response.audio.done", "output_audio.done"):
-                    if audio_chunks:
-                        player.enqueue(b"".join(audio_chunks))
-                        audio_chunks = []
-                    continue
+                    b = base64.b64decode(msg["audio"])
+                    current_chunks.append(b)
 
-                # TEXT (optional captions)
-                if t in ("response.text.delta", "response.output_text.delta"):
-                    print(msg.get("delta",""), end="", flush=True); continue
-                if t in ("response.text.done", "response.output_text.done"):
-                    print(); continue
+                elif t == "output_audio.done":
+                    pcm = b"".join(current_chunks); current_chunks = []
+                    player.enqueue(pcm)
 
-                # LIFECYCLE
-                if t in ("response.completed", "response.done"):
+                elif t in ("response.completed", "response.done"):
                     expecting_audio = False
                     awaiting_response = False
-                    continue
-                else:
-                    print("[recv]", t, msg.get("id") or msg.get("event_id") or "", flush=True)
-                
-                if t.startswith("response."):
+
+                elif t in ("response.completed", "response.done"):
+                    expecting_audio = False
+                    awaiting_response = False
+                elif t == "error":
+                    err = msg.get("error", {})
+                    code = err.get("code")
+                    # If the server rejected the commit as empty, no response will arrive → clear the latch
+                    if code == "input_audio_buffer_commit_empty":
+                        awaiting_response = False
+                    # If it says "active response", keep the latch True (one is indeed in progress)
+
+                elif t == "input_audio_buffer.committed":
+                    print("[server] input_audio_buffer committed:", msg.get("item_id"))
+
+                elif t.startswith("response."):
                     print("[debug]", t, msg)
 
         async def mic_loop():
@@ -200,68 +185,75 @@ async def realtime_session(args):
                     try:
                         chunk = await asyncio.wait_for(mic.q.get(), timeout=0.2)
                     except asyncio.TimeoutError:
-                        await asyncio.sleep(0); continue
+                        await asyncio.sleep(0)
+                        continue
                     if chunk:
                         audio_buf += chunk
-                        captured_ms += 20   # 20 ms per callback block
+                        captured_ms += 20  # 20ms per callback block
                 else:
                     await asyncio.sleep(0.01)
 
-
         async def control_loop():
-            nonlocal recording, audio_buf, captured_ms, expecting_audio, awaiting_response
+            nonlocal recording, audio_buf, captured_ms, expecting_audio, awaiting_response, last_enter, send_lock
             while True:
                 cmd = (await user_input(">> ")).strip()
+                now = time.time()
                 if cmd == "":
+                    # debounce Enter
+                    if now - last_enter < 0.2:
+                        print("[debug] ignored duplicate Enter (debounce)")
+                        continue
+                    last_enter = now
                     if not recording:
+                        if awaiting_response:
+                            print("[debug] response in progress; wait for completion.")
+                            continue
+                        # Start recording
                         if args.barge_in and expecting_audio:
                             await ws.send(json.dumps({"type": "response.cancel"}))
                             player.clear()
-
-                        await ws.send(json.dumps({"type": "input_audio_buffer.clear"}))
-                        try:
-                            mic.start()
-                        except Exception:
-                            # don’t flip into “recording” state if start failed
-                            continue
+                        mic.start()
                         recording = True
-                        audio_buf = bytearray(); captured_ms = 0
+                        audio_buf = bytearray()
+                        captured_ms = 0
                         print("[rec] ... speak ... (press Enter to send)")
                     else:
                         # Stop, commit, request response
-                        print(f"[rec] stopping; captured ~{captured_ms} ms")
                         recording = False
                         mic.stop()
 
-                        min_ms = max(150, args.min_ms)
-                        if captured_ms < min_ms:
+                        min_ms = max(100, args.min_ms)
+                        if captured_ms < min_ms or len(audio_buf) < int(args.sr * (min_ms/1000.0)) * 2:
                             print(f"[rec] too little audio recorded ({captured_ms} ms), discarded.")
-                            audio_buf = bytearray()
+                            audio_buf = bytearray(); captured_ms = 0
                             continue
 
-                        # 1) append full buffer once
-                        await ws.send(json.dumps({
-                            "type": "input_audio_buffer.append",
-                            "audio": base64.b64encode(audio_buf).decode("ascii")
-                        }))
-                        # 2) commit, small pause
-                        await ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
-                        await asyncio.sleep(0.05)
-                        print(f"[rec] sent {captured_ms} ms ({len(audio_buf)} bytes). Waiting for reply...")
+                        # Serialize this whole block to avoid duplicate Enter / races
+                        async with send_lock:
+                            if awaiting_response:
+                                print("[debug] response in progress; wait for completion.")
+                                audio_buf = bytearray(); captured_ms = 0
+                                continue
 
-                        # 3) create ONE response
-                        if not awaiting_response:
+                            # LATCH FIRST so nothing else can create another response
                             awaiting_response = True
+
+                            # send audio then commit
+                            await ws.send(json.dumps({
+                                "type": "input_audio_buffer.append",
+                                "audio": base64.b64encode(audio_buf).decode("ascii")
+                            }))
+                            await ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+                            print(f"[rec] sent {captured_ms} ms ({len(audio_buf)} bytes). Waiting for reply...")
+
+                            # request one response
                             await ws.send(json.dumps({
                                 "type": "response.create",
-                                "response": {"modalities": ["audio","text"]}
+                                "response": {"modalities": ["audio", "text"]}
                             }))
-                        else:
-                            print("[debug] skipped response.create (already awaiting).")
 
-                        # reset local buffer
-                        audio_buf = bytearray()
-                        captured_ms = 0
+                        # Reset for next turn
+                        audio_buf = bytearray(); captured_ms = 0
 
                 elif cmd == "/s":
                     if expecting_audio:
