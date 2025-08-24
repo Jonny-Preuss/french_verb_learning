@@ -147,35 +147,42 @@ async def realtime_session(args):
                     if code == "response_cancel_not_active":
                         continue
                     print(f"[error] {msg}", file=sys.stderr)
-
-                elif t == "output_audio.delta":
-                    expecting_audio = True
-                    b = base64.b64decode(msg["audio"])
-                    current_chunks.append(b)
-
-                elif t == "output_audio.done":
-                    pcm = b"".join(current_chunks); current_chunks = []
-                    player.enqueue(pcm)
-
-                elif t in ("response.completed", "response.done"):
-                    expecting_audio = False
-                    awaiting_response = False
-
-                elif t in ("response.completed", "response.done"):
-                    expecting_audio = False
-                    awaiting_response = False
-                elif t == "error":
-                    err = msg.get("error", {})
-                    code = err.get("code")
-                    # If the server rejected the commit as empty, no response will arrive → clear the latch
                     if code == "input_audio_buffer_commit_empty":
                         awaiting_response = False
-                    # If it says "active response", keep the latch True (one is indeed in progress)
+                    continue
 
-                elif t == "input_audio_buffer.committed":
+                # ---- AUDIO STREAM (support both event names & payload keys) ----
+                if t in ("response.audio.delta", "output_audio.delta"):
+                    expecting_audio = True
+                    b64 = msg.get("delta") or msg.get("audio")
+                    if b64:
+                        current_chunks.append(base64.b64decode(b64))
+                    continue
+
+                if t in ("response.audio.done", "output_audio.done"):
+                    if current_chunks:
+                        pcm = b"".join(current_chunks)
+                        current_chunks = []
+                        player.enqueue(pcm)
+                    continue
+
+                # ---- RESPONSE LIFECYCLE ----
+                if t in ("response.completed", "response.done"):
+                    expecting_audio = False
+                    awaiting_response = False
+                    continue
+
+                # Optional: helpful logs
+                if t == "input_audio_buffer.committed":
                     print("[server] input_audio_buffer committed:", msg.get("item_id"))
+                    continue
 
-                elif t.startswith("response."):
+                if t.endswith("transcript.done"):
+                    # assistant transcript or (if enabled) input transcript
+                    print("[transcript]", msg.get("transcript"))
+                    continue
+
+                if t.startswith("response."):
                     print("[debug]", t, msg)
 
         async def mic_loop():
