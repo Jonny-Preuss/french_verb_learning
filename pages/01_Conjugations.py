@@ -186,7 +186,7 @@ if st.button("Next verb"):
 # TODO: Set option of different modes: random verb and form / go through verb one by one in all forms / go through one tense entirely for a verb but only that one tense (and show all personal pronouns at once with input fields)
 # TODO: Check if a word has been "learned" if all inputs in the UserInput Sheet are correct and then mark it as TRUE (boolean) and not "True"
 # TODO: Show progress (e.g. "50/1000 verbs completed") and a score of this session/today/always
-# TODO: Show example/practice sentences
+# TODO: Show example/practice sentences (and formulate them in a certain style, e.g. dark humour, on a certain topic, e.g. current French politics)
 
 # WRITEBACK:
 # TODO: Fill (by hand!) remaining empty cells in the Excel tab "Solutions"

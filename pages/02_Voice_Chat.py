@@ -359,3 +359,16 @@ with voice_tab:
     st.divider()
     st.caption("Session log")
     st.code("\n".join(st.session_state.voice_log[-200:]) or "(no messages yet)", language="text")
+
+
+
+
+# FEATURE IDEAS
+# Fix cackling sound output
+# Make responses come in quicker (if possible)
+# Make the persona more Parisian-like of a 30-something year old.
+# Set further instruction options such as teaching style (corrections or not, vocabulary tips, etc.)
+# Integrate knowledge of current events, weather and so on
+# Maybe move sound in-/output to browser instead of machine
+# Fix the button styles for a easier flow of conversation
+# Allow for direct voice detection instead of taking turns based on clicks?
