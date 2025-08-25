@@ -4,15 +4,21 @@ import asyncio, base64, json, os, sys, threading, queue, time, signal
 import numpy as np
 import sounddevice as sd
 import websockets
+import queue
+try:
+    from streamlit_autorefresh import st_autorefresh
+except Exception:
+    st_autorefresh = None
 
 # ---------- minimal reuse of your classes ----------
 class AudioPlayer:
-    def __init__(self, samplerate: int, output_device=None):
+    def __init__(self, samplerate: int, output_device=None, log_q: queue.Queue|None=None):
         self.sr = samplerate
         self.output_device = output_device
         self.q: "queue.Queue[bytes|None]" = queue.Queue()
         self._stop = threading.Event()
         self._thr = threading.Thread(target=self._run, daemon=True)
+        self.log_q = log_q
 
     def start(self):
         self._thr.start()
@@ -30,9 +36,11 @@ class AudioPlayer:
             self.q.queue.clear()
 
     def _run(self):
-        if self.output_device is not None:
-            # set output device (input, output)
-            sd.default.device = (sd.default.device[0], self.output_device)
+        try:
+            if self.output_device is not None:
+                sd.default.device = (sd.default.device[0], self.output_device)
+        except Exception as e:
+            if self.log_q: self.log_q.put(f"[player] device set error: {e}")
         while not self._stop.is_set():
             item = self.q.get()
             if item is None: break
@@ -40,7 +48,7 @@ class AudioPlayer:
                 arr = np.frombuffer(item, dtype=np.int16)
                 sd.play(arr, self.sr, blocking=True)
             except Exception as e:
-                st.warning(f"[player] playback error: {e}")
+                if self.log_q: self.log_q.put(f"[player] playback error: {e}")
 
 class MicStream:
     def __init__(self, samplerate: int, chunk_ms: int = 50, device=None):
@@ -70,7 +78,7 @@ class MicStream:
 async def realtime_session_streamlit(
     api_key: str, model: str, voice: str, sr: int, chunk_ms: int,
     system_prompt: str, barge_in: bool, input_device: int|None, output_device: int|None,
-    stop_flag: dict
+    stop_flag: dict, log_q: queue.Queue, controls: dict
 ):
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -96,7 +104,7 @@ async def realtime_session_streamlit(
             },
         }))
 
-        player = AudioPlayer(sr, output_device=output_device); player.start()
+        player = AudioPlayer(sr, output_device=output_device, log_q=log_q); player.start()
         mic = MicStream(sr, chunk_ms=chunk_ms, device=input_device)
 
         recording = False
@@ -122,7 +130,7 @@ async def realtime_session_streamlit(
                     err = msg.get("error", {})
                     code = err.get("code")
                     if code != "response_cancel_not_active":
-                        st.session_state.voice_log.append(f"[error] {msg}")
+                        log_q.put(f"[error] {msg}")
                     if code == "input_audio_buffer_commit_empty":
                         awaiting_response = False
                     continue
@@ -147,15 +155,15 @@ async def realtime_session_streamlit(
                     continue
 
                 if t == "input_audio_buffer.committed":
-                    st.session_state.voice_log.append(f"[server] committed: {msg.get('item_id')}")
+                    log_q.put(f"[server] committed: {msg.get('item_id')}")
                     continue
 
                 if t.endswith("transcript.done"):
-                    st.session_state.voice_log.append(f"[transcript] {msg.get('transcript')}")
+                    log_q.put(f"[transcript] {msg.get('transcript')}")
                     continue
 
                 if t.startswith("response."):
-                    st.session_state.voice_log.append(f"[debug] {t}")
+                    log_q.put(f"[debug] {t}")
 
         # ---- mic loop ----
         async def mic_loop():
@@ -179,10 +187,11 @@ async def realtime_session_streamlit(
             nonlocal recording, audio_buf, captured_ms, expecting_audio, awaiting_response, last_enter
             while not stop_flag["stop"]:
                 await asyncio.sleep(0.05)
-                # start recording
-                if (not recording) and st.session_state.get("voice_pushtotalk", False):
+
+                # start recording when ptt True
+                if (not recording) and controls.get("ptt", False):
                     if awaiting_response:
-                        st.session_state.voice_log.append("[debug] response in progress; wait.")
+                        log_q.put("[debug] response in progress; wait.")
                         continue
                     if barge_in and expecting_audio:
                         await ws.send(json.dumps({"type": "response.cancel"}))
@@ -190,22 +199,21 @@ async def realtime_session_streamlit(
                     mic.start()
                     recording = True
                     audio_buf = bytearray(); captured_ms = 0
-                    st.session_state.voice_log.append("[rec] start (hold/keep pressed)")
+                    log_q.put("[rec] start")
 
-                # stop & send when user releases the button
-                if recording and not st.session_state.get("voice_pushtotalk", False):
+                # stop & send when ptt False
+                if recording and not controls.get("ptt", False):
                     recording = False
                     mic.stop()
-
-                    min_ms = max(100, 200)  # default min duration
+                    min_ms = max(100, 200)
                     if captured_ms < min_ms or len(audio_buf) < int(sr * (min_ms/1000)) * 2:
-                        st.session_state.voice_log.append(f"[rec] too short ({captured_ms} ms) -> discard")
+                        log_q.put(f"[rec] too short ({captured_ms} ms) -> discard")
                         audio_buf = bytearray(); captured_ms = 0
                         continue
 
                     async with send_lock:
                         if awaiting_response:
-                            st.session_state.voice_log.append("[debug] response in progress; skip send")
+                            log_q.put("[debug] response in progress; skip send")
                             audio_buf = bytearray(); captured_ms = 0
                             continue
                         awaiting_response = True
@@ -215,13 +223,14 @@ async def realtime_session_streamlit(
                             "audio": base64.b64encode(audio_buf).decode("ascii")
                         }))
                         await ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
-                        st.session_state.voice_log.append(f"[rec] sent {captured_ms} ms")
+                        log_q.put(f"[rec] sent {captured_ms} ms")
                         await ws.send(json.dumps({
                             "type": "response.create",
                             "response": {"modalities": ["audio", "text"]}
                         }))
 
                     audio_buf = bytearray(); captured_ms = 0
+
 
         tasks = [
             asyncio.create_task(recv_loop()),
@@ -252,8 +261,21 @@ with voice_tab:
         st.session_state.voice_stop = {"stop": False}
     if "voice_log" not in st.session_state:
         st.session_state.voice_log = []
-    if "voice_pushtotalk" not in st.session_state:
-        st.session_state.voice_pushtotalk = False
+    if "voice_log_q" not in st.session_state:
+        st.session_state.voice_log_q = queue.Queue()
+    # if "voice_log" not in st.session_state:
+    #     st.session_state.voice_log = []
+    # if "voice_pushtotalk" not in st.session_state:
+    #     st.session_state.voice_pushtotalk = False
+    # TODO: CHECK IF THIS IS NEEDED
+
+    # Control channel from UI -> worker (don't touch Streamlit from worker)
+    if "voice_controls" not in st.session_state:
+        st.session_state.voice_controls = {"ptt": False}  # push-to-talk flag
+
+    def _on_ptt_change():
+        # Mirror widget value into thread-safe dict
+        st.session_state.voice_controls["ptt"] = st.session_state.voice_ptt
 
     # --- Controls ---
     col1, col2, col3 = st.columns(3)
@@ -272,12 +294,18 @@ with voice_tab:
 
     system_prompt = st.text_area(
         "System instructions (accent/style etc.)",
-        value="Speak French with a nicely understandable Parisian accent. Be nice, supportive and talkative like a French teacher."
+        value="Speak French with a nicely understandable Parisian accent. Don't talk too slow, talk like a regular Parisian, use slang if known to you. " \
+                "Be nice, supportive and talkative like a French teacher."
     )
 
     # Push-to-talk button (hold-to-speak feel: toggle on while pressed)
     # Streamlit buttons are click events; emulate a hold with a toggle.
-    talk = st.toggle("Hold to talk (press to start, press again to send)", value=False, key="voice_pushtotalk")
+    talk = st.toggle("Hold to talk (press to start, press again to send)", 
+                     value=False, 
+                     # key="voice_pushtotalk" # TODO: CHECK IF THIS IS NEEDED
+                     key="voice_ptt",
+                    on_change=_on_ptt_change,
+                     )
 
     colA, colB = st.columns(2)
     with colA:
@@ -296,7 +324,9 @@ with voice_tab:
                 system_prompt=system_prompt, barge_in=barge_in,
                 input_device=int(input_dev) if input_dev is not None else None,
                 output_device=int(output_dev) if output_dev is not None else None,
-                stop_flag=st.session_state.voice_stop
+                stop_flag=st.session_state.voice_stop,
+                log_q=st.session_state.voice_log_q,
+                controls=st.session_state.voice_controls,  
             )
             st.session_state.voice_thread = threading.Thread(
                 target=run_loop_in_thread,
@@ -310,10 +340,22 @@ with voice_tab:
         st.session_state.voice_stop["stop"] = True
         st.session_state.voice_thread.join(timeout=2.0)
         st.session_state.voice_thread = None
-        st.session_state.voice_pushtotalk = False
+        # st.session_state.voice_pushtotalk = False
+        st.session_state.voice_controls["ptt"] = False
         st.success("Session stopped.")
 
     # live log
+    # Optional auto-refresh for smoother logs
+    if st_autorefresh:
+        st_autorefresh(interval=500, key="voice_log_refresh")  # every 0.5s
+
+    # Drain background log queue into the UI list
+    q = st.session_state.voice_log_q
+    while not q.empty():
+        try:
+            st.session_state.voice_log.append(q.get_nowait())
+        except queue.Empty:
+            break
     st.divider()
     st.caption("Session log")
     st.code("\n".join(st.session_state.voice_log[-200:]) or "(no messages yet)", language="text")
