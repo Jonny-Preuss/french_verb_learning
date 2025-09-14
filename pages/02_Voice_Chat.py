@@ -188,8 +188,9 @@ async def realtime_session_streamlit(
             while not stop_flag["stop"]:
                 await asyncio.sleep(0.05)
 
-                # start recording when ptt True
-                if (not recording) and controls.get("ptt", False):
+                # start recording when record event is set
+                if (not recording) and controls.get("record", False):
+                    controls["record"] = False
                     if awaiting_response:
                         log_q.put("[debug] response in progress; wait.")
                         continue
@@ -201,8 +202,9 @@ async def realtime_session_streamlit(
                     audio_buf = bytearray(); captured_ms = 0
                     log_q.put("[rec] start")
 
-                # stop & send when ptt False
-                if recording and not controls.get("ptt", False):
+                # stop & send when send event is set
+                if recording and controls.get("send", False):
+                    controls["send"] = False
                     recording = False
                     mic.stop()
                     min_ms = max(100, 200)
@@ -254,7 +256,7 @@ def run_loop_in_thread(coro):
 voice_tab = st.tabs(["Voice Assistant"])[0]
 
 with voice_tab:
-    st.subheader("🎙️ Speak to AI (Push-to-Talk)")
+    st.subheader("🎙️ Speak to AI")
     if "voice_thread" not in st.session_state:
         st.session_state.voice_thread = None
     if "voice_stop" not in st.session_state:
@@ -271,50 +273,55 @@ with voice_tab:
 
     # Control channel from UI -> worker (don't touch Streamlit from worker)
     if "voice_controls" not in st.session_state:
-        st.session_state.voice_controls = {"ptt": False}  # push-to-talk flag
+        st.session_state.voice_controls = {"record": False, "send": False} # push-to-talk flag
 
-    def _on_ptt_change():
+    # def _on_ptt_change():
         # Mirror widget value into thread-safe dict
-        st.session_state.voice_controls["ptt"] = st.session_state.voice_ptt
+        # st.session_state.voice_controls["ptt"] = st.session_state.voice_ptt
 
     # --- Controls ---
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        api_key = st.text_input("OPENAI_API_KEY", type="password", value=os.getenv("OPENAI_API_KEY",""))
-        model = st.selectbox("Model", ["gpt-4o-realtime-preview"], index=0)
-        voice = st.selectbox("Voice", ["verse", "alloy", "aria", "sage"], index=0)
-    with col2:
-        sr = st.selectbox("Sample rate", [24000, 16000], index=0)
-        chunk_ms = st.slider("Mic chunk (ms)", 10, 100, 20, step=10)
-        barge_in = st.checkbox("Barge-in (cancel current speech on talk)", value=True)
-    with col3:
-        input_dev = st.number_input("Input device index", value=0, step=1)
-        output_dev = st.number_input("Output device index", value=sd.default.device[1] if sd.default.device else 0, step=1)
-        st.caption("Use `python -c 'import sounddevice as sd; print(sd.query_devices())'` to find indexes.")
+    with st.expander("Options", expanded=False):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            api_key = st.text_input("OPENAI_API_KEY", type="password", value=os.getenv("OPENAI_API_KEY",""))
+            model = st.selectbox("Model", ["gpt-4o-realtime-preview"], index=0)
+            voice = st.selectbox("Voice", ["verse", "alloy", "aria", "sage"], index=0)
+        with col2:
+            sr = st.selectbox("Sample rate", [24000, 16000], index=0)
+            chunk_ms = st.slider("Mic chunk (ms)", 10, 100, 20, step=10)
+            barge_in = st.checkbox("Barge-in (cancel current speech on talk)", value=True)
+        with col3:
+            input_dev = st.number_input("Input device index", value=0, step=1)
+            output_dev = st.number_input("Output device index", value=sd.default.device[1] if sd.default.device else 0, step=1)
+            st.caption("Use `python -c 'import sounddevice as sd; print(sd.query_devices())'` to find indexes.")
 
-    system_prompt = st.text_area(
-        "System instructions (accent/style etc.)",
-        value="Speak French with a nicely understandable Parisian accent. Don't talk too slow, talk like a regular Parisian, use slang if known to you. " \
-                "Be nice, supportive and talkative like a French teacher."
-    )
+        system_prompt = st.text_area(
+            "System instructions (accent/style etc.)",
+            value="Speak French with a nicely understandable Parisian accent. Don't talk too slow, talk like a regular Parisian, use slang if known to you. " \
+                    "Be nice, supportive and talkative like a French teacher."
+        )
 
-    # Push-to-talk button (hold-to-speak feel: toggle on while pressed)
-    # Streamlit buttons are click events; emulate a hold with a toggle.
-    talk = st.toggle("Hold to talk (press to start, press again to send)", 
-                     value=False, 
-                     # key="voice_pushtotalk" # TODO: CHECK IF THIS IS NEEDED
-                     key="voice_ptt",
-                    on_change=_on_ptt_change,
-                     )
+        # Push-to-talk button (hold-to-speak feel: toggle on while pressed)
+        # Streamlit buttons are click events; emulate a hold with a toggle.
+    # talk = st.toggle("Hold to talk (press to start, press again to send)",
+    #                value=False,
+    #                # key="voice_pushtotalk" # TODO: CHECK IF THIS IS NEEDED
+    #                key="voice_ptt",
+    #                on_change=_on_ptt_change,
+    #                )
 
     colA, colB = st.columns(2)
     with colA:
-        start = st.button("▶️ Start session", type="primary", disabled=st.session_state.voice_thread is not None)
+        if st.button("🎙️ Talk", disabled=st.session_state.voice_thread is None):
+            st.session_state.voice_controls["record"] = True
     with colB:
-        stop = st.button("⏹ Stop session", disabled=st.session_state.voice_thread is None)
+        if st.button("📤 Send", disabled=st.session_state.voice_thread is None):
+            st.session_state.voice_controls["send"] = True
+
+    session_active = st.toggle("Session active", value=st.session_state.voice_thread is not None)
 
     # --- Start / Stop behavior ---
-    if start:
+    if session_active and st.session_state.voice_thread is None:
         if not api_key:
             st.error("Provide OPENAI_API_KEY.")
         else:
@@ -326,7 +333,7 @@ with voice_tab:
                 output_device=int(output_dev) if output_dev is not None else None,
                 stop_flag=st.session_state.voice_stop,
                 log_q=st.session_state.voice_log_q,
-                controls=st.session_state.voice_controls,  
+                controls=st.session_state.voice_controls,
             )
             st.session_state.voice_thread = threading.Thread(
                 target=run_loop_in_thread,
@@ -334,14 +341,14 @@ with voice_tab:
                 daemon=True
             )
             st.session_state.voice_thread.start()
-            st.success("Session started. Toggle **Hold to talk** to speak.")
+            st.success("Session started. Use **Talk** then **Send** to speak.")
 
-    if stop and st.session_state.voice_thread is not None:
+    if (not session_active) and st.session_state.voice_thread is not None:
         st.session_state.voice_stop["stop"] = True
         st.session_state.voice_thread.join(timeout=2.0)
         st.session_state.voice_thread = None
-        # st.session_state.voice_pushtotalk = False
-        st.session_state.voice_controls["ptt"] = False
+        st.session_state.voice_controls["record"] = False
+        st.session_state.voice_controls["send"] = False
         st.success("Session stopped.")
 
     # live log
