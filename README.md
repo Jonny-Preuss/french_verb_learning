@@ -31,19 +31,25 @@ french_verb_learning/ <br>
 
 ## 🚀 How to Run
 
-1. 📦 **Install dependencies** (ideally in a virtualenv or conda environment):
+1. 📦 **Install uv** (if you haven't already):
 
    ```bash
-   pip install streamlit pandas openpyxl 
+   curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
 
-2. ▶️ Run the app:
+2. 📦 **Install dependencies** using uv:
+
+   ```bash
+   uv sync
+   ```
+
+3. ▶️ Run the app:
 
     ```bash
-    streamlit run main.py 
+    uv run streamlit run Home.py
     ```
 
-3. 🎯 Follow the on-screen prompts to start conjugating!
+4. 🎯 Follow the on-screen prompts to start conjugating!
 
 
 ## ✨ Future Features (Planned)
