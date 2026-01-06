@@ -75,7 +75,7 @@ def show_conjugation_position(selected_tense, selected_pronoun):
         margin=dict(t=40, b=20, l=20, r=20),
     )
 
-    st.plotly_chart(tense_bar, use_container_width=True)
+    st.plotly_chart(tense_bar, width="stretch")
 
     # PRONOUN bar
     pronoun_index = pronouns.index(selected_pronoun) if selected_pronoun in pronouns else None
@@ -97,4 +97,4 @@ def show_conjugation_position(selected_tense, selected_pronoun):
         margin=dict(t=40, b=20, l=20, r=20),
     )
 
-    st.plotly_chart(pronoun_bar, use_container_width=True)
+    st.plotly_chart(pronoun_bar, width="stretch")
