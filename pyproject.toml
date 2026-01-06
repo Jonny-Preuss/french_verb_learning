@@ -1,0 +1,35 @@
+[project]
+name = "french-verb-learning"
+version = "0.1.0"
+description = "A Streamlit app to practice and memorize French verb conjugations"
+requires-python = ">=3.12"
+authors = [
+    { name = "Jonny Preuss" }
+]
+dependencies = [
+    "streamlit>=1.44.1",
+    "pandas>=2.2.3",
+    "openpyxl>=3.1.5",
+    "numpy>=2.2.4",
+    "altair>=5.5.0",
+    "plotly>=6.0.1",
+    "scikit-learn>=1.6.1",
+    "mlconjug3>=3.8.3",
+    "openai>=1.77.0",
+    "audio-recorder-streamlit>=0.0.8",
+    "python-dotenv>=1.1.0",
+    "requests>=2.32.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ipython>=9.2.0",
+    "jupyter>=1.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["src"]
