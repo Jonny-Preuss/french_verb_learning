@@ -49,7 +49,7 @@ Style:
 - N'invente jamais une actualite recente si aucun contexte recent ne t'a ete fourni.
 """
 
-RESPONSE_SPEED = 0.92
+DEFAULT_RESPONSE_SPEED = 0.92
 
 VOICE_OPTIONS = [
     "alloy",
@@ -320,6 +320,7 @@ def _mint_realtime_client_secret(
     *,
     voice: str,
     instructions: str,
+    response_speed: float,
 ) -> dict[str, Any]:
     payload = {
         "session": {
@@ -343,7 +344,7 @@ def _mint_realtime_client_secret(
                 },
                 "output": {
                     "voice": voice,
-                    "speed": RESPONSE_SPEED,
+                    "speed": response_speed,
                 },
             },
         }
@@ -380,12 +381,13 @@ def _build_realtime_component(
     voice: str,
     instructions: str,
     greeting: str,
+    response_speed: float,
 ) -> str:
     config_json = json.dumps(
         {
             "clientSecret": client_secret,
             "voice": voice,
-            "responseSpeed": RESPONSE_SPEED,
+            "responseSpeed": response_speed,
             "instructions": instructions,
             "model": "gpt-realtime",
             "greeting": greeting,
@@ -1573,7 +1575,7 @@ memory_store = load_memory_store()
 profile_defaults = memory_store["profile"]
 cached_context = load_live_context_cache()
 
-with st.expander("Settings", expanded=not bool(api_key)):
+with st.expander("General settings", expanded=not bool(api_key)):
     api_key_input = st.text_input(
         "OpenAI API key",
         value=api_key,
@@ -1590,6 +1592,15 @@ with st.expander("Settings", expanded=not bool(api_key)):
         help="Choose the voice you want to practise with.",
     )
 
+    response_speed = st.slider(
+        "Response speed",
+        min_value=0.85,
+        max_value=1.05,
+        value=DEFAULT_RESPONSE_SPEED,
+        step=0.01,
+        help="A slightly lower value makes Lucie speak more slowly and calmly.",
+    )
+
     system_prompt = st.text_area(
         "Conversation instructions",
         value=DEFAULT_PROMPT,
@@ -1597,7 +1608,7 @@ with st.expander("Settings", expanded=not bool(api_key)):
         help="Use this to shape Lucie's teaching style, tone, and speaking pace.",
     )
 
-    st.markdown("##### About you")
+with st.expander("About you", expanded=False):
     display_name = st.text_input(
         "Name or what Lucie should call you",
         value=profile_defaults.get("display_name", ""),
@@ -1642,7 +1653,7 @@ with st.expander("Settings", expanded=not bool(api_key)):
         help="Use this for durable personal context, not correction-style instructions.",
     )
 
-    st.markdown("##### Current topics")
+with st.expander("Current topics", expanded=False):
     topic_focus = st.multiselect(
         "Topic areas",
         TOPIC_OPTIONS,
@@ -1880,6 +1891,7 @@ try:
             api_key,
             voice=selected_voice,
             instructions=effective_prompt,
+            response_speed=response_speed,
         )
 except Exception as exc:
     st.error(f"Could not prepare the live speaking connection: {exc}")
@@ -1961,6 +1973,7 @@ components.html(
         voice=selected_voice,
         instructions=effective_prompt,
         greeting=greeting_prompt,
+        response_speed=response_speed,
     ),
     height=760,
     scrolling=False,
