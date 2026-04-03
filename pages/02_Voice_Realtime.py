@@ -13,23 +13,43 @@ import requests
 import streamlit as st
 import streamlit.components.v1 as components
 
+from src.voice_realtime_memory import (
+    MEMORY_PATH,
+    TOPIC_CACHE_PATH,
+    append_learned_facts,
+    build_user_context_block,
+    load_live_context_cache,
+    load_memory_store,
+    save_live_context_cache,
+    summarize_transcript_to_facts,
+    update_profile,
+)
+
 
 DEFAULT_PROMPT = """Tu es Lucie, une partenaire de conversation francaise tres naturelle et chaleureuse.
 
 Objectif:
 - Aider l'utilisateur a parler francais de maniere fluide et detendue.
 - Prioriser la conversation orale naturelle, pas les explications longues.
-- Corriger seulement les erreurs importantes ou recurrentes, de facon breve et encourageante.
+- Corriger seulement les erreurs importantes ou recurrentes, de facon breve, humaine et encourageante.
 - Si un contexte d'actualite recente est fourni, commence par proposer trois sujets tires uniquement de ce contexte et demande lequel l'utilisateur veut choisir.
 
 Style:
 - Parle uniquement en francais sauf si l'utilisateur demande autre chose.
-- Garde des reponses vocales plutot courtes, vivantes et conversationnelles.
-- Pose souvent une question de suivi pour maintenir le rythme.
+- Sonne comme une vraie prof sympa, pas comme un chatbot de support ni comme une lecon recitee.
+- Garde des reponses plutot courtes a moyennes, vivantes et conversationnelles.
+- Varie tes debuts de reponse. N'utilise pas toujours les memes accroches.
+- Commence parfois par une petite reaction naturelle avant de repondre, sans surjouer.
+- Utilise des phrases simples et orales, avec des contractions naturelles quand c'est approprie.
+- Parle un peu plus lentement que d'habitude, avec une cadence posee, des petites pauses naturelles et une articulation claire.
+- Evite d'enchainer trop vite les idees; une idee principale par reponse suffit souvent.
+- Pose une question de suivi seulement quand elle fait vraiment avancer l'echange.
 - Quand l'utilisateur hesite, aide-le doucement au lieu de changer de sujet.
 - Si l'utilisateur parle d'un verbe ou fait une erreur de conjugaison, integre une mini-correction naturelle dans ta reponse.
 - N'invente jamais une actualite recente si aucun contexte recent ne t'a ete fourni.
 """
+
+RESPONSE_SPEED = 0.92
 
 VOICE_OPTIONS = [
     "alloy",
@@ -52,6 +72,9 @@ TOPIC_OPTIONS = [
     "Society",
     "Food and lifestyle",
 ]
+
+MEMORY_PAYLOAD_LABEL = "Voice realtime memory payload bridge"
+SAVE_MEMORY_BUTTON_LABEL = "Voice realtime process memory"
 
 
 def _build_live_context_search_prompt(
@@ -256,6 +279,42 @@ def _build_greeting(topics: list[dict[str, str]]) -> str:
     )
 
 
+def _build_profile_payload(
+    *,
+    display_name: str,
+    location: str,
+    background: str,
+    interests: str,
+    lifestyle: str,
+    french_goals: str,
+    extra_context: str,
+) -> dict[str, str]:
+    return {
+        "display_name": display_name.strip(),
+        "location": location.strip(),
+        "background": background.strip(),
+        "interests": interests.strip(),
+        "lifestyle": lifestyle.strip(),
+        "french_goals": french_goals.strip(),
+        "extra_context": extra_context.strip(),
+    }
+
+
+def _parse_memory_payload(raw_payload: str) -> dict[str, Any] | None:
+    payload_text = raw_payload.strip()
+    if not payload_text:
+        return None
+
+    try:
+        payload = json.loads(payload_text)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
 def _mint_realtime_client_secret(
     api_key: str,
     *,
@@ -280,10 +339,11 @@ def _mint_realtime_client_secret(
                         "interrupt_response": True,
                         "prefix_padding_ms": 400,
                         "silence_duration_ms": 3000,
-                    }
+                    },
                 },
                 "output": {
                     "voice": voice,
+                    "speed": RESPONSE_SPEED,
                 },
             },
         }
@@ -325,6 +385,7 @@ def _build_realtime_component(
         {
             "clientSecret": client_secret,
             "voice": voice,
+            "responseSpeed": RESPONSE_SPEED,
             "instructions": instructions,
             "model": "gpt-realtime",
             "greeting": greeting,
@@ -785,6 +846,7 @@ def _build_realtime_component(
             <div class="controls">
               <button id="connectBtn" class="action primary">Start Speaking</button>
               <button id="hangupBtn" class="action secondary" disabled>Pause Practice</button>
+              <button id="saveBtn" class="action secondary">End & Save Memory</button>
               <button id="clearBtn" class="action ghost">Clear Conversation</button>
             </div>
 
@@ -832,11 +894,15 @@ def _build_realtime_component(
       let currentAssistantText = "";
       let currentUserText = "";
       let currentAssistantFinalized = false;
+      let transcriptTurns = [];
+      let saveInFlight = false;
+      let sessionStartedAt = null;
 
       const stage = document.getElementById("stage");
       const micBtn = document.getElementById("micBtn");
       const connectBtn = document.getElementById("connectBtn");
       const hangupBtn = document.getElementById("hangupBtn");
+      const saveBtn = document.getElementById("saveBtn");
       const clearBtn = document.getElementById("clearBtn");
       const modeChip = document.getElementById("modeChip");
       const voiceChip = document.getElementById("voiceChip");
@@ -856,10 +922,36 @@ def _build_realtime_component(
       function setControls() {{
         connectBtn.disabled = sessionActive;
         hangupBtn.disabled = !sessionActive;
+        saveBtn.disabled = saveInFlight || (!sessionActive && transcriptTurns.length === 0 && !currentUserText && !currentAssistantText);
         micBtn.disabled = false;
         micBtn.textContent = sessionActive ? "⏹" : "🎙️";
         micBtn.title = sessionActive ? "Pause practice" : "Start speaking";
         voiceChip.textContent = `Voice: ${{CONFIG.voice}}`;
+      }}
+
+      function hideBridgeControls() {{
+        const parentDoc = window.parent && window.parent.document;
+        if (!parentDoc) return;
+
+        const bridgeTextarea = parentDoc.querySelector('textarea[aria-label="{MEMORY_PAYLOAD_LABEL}"]');
+        if (bridgeTextarea) {{
+          const container = bridgeTextarea.closest('[data-testid="stTextArea"]');
+          if (container) {{
+            container.style.display = "none";
+          }}
+        }}
+
+        const bridgeButton = Array.from(parentDoc.querySelectorAll("button")).find(
+          (button) => button.textContent && button.textContent.trim() === "{SAVE_MEMORY_BUTTON_LABEL}"
+        );
+        if (bridgeButton) {{
+          const container = bridgeButton.closest('[data-testid="stButton"]');
+          if (container) {{
+            container.style.display = "none";
+          }} else {{
+            bridgeButton.style.display = "none";
+          }}
+        }}
       }}
 
       function stampEvent(text) {{
@@ -908,6 +1000,13 @@ def _build_realtime_component(
 
       function addSystemBubble(text) {{
         ensureBubble("system", text);
+      }}
+
+      function pushTranscriptTurn(role, text) {{
+        const cleanText = (text || "").trim();
+        if (!cleanText) return;
+        transcriptTurns.push({{ role, content: cleanText }});
+        setControls();
       }}
 
       function sendEvent(payload) {{
@@ -1030,6 +1129,7 @@ def _build_realtime_component(
 
           sessionActive = true;
           assistantSpeaking = false;
+          sessionStartedAt = new Date().toISOString();
           setControls();
           setUIState(
             "listening",
@@ -1078,6 +1178,7 @@ def _build_realtime_component(
               }},
               output: {{
                 voice: CONFIG.voice,
+                speed: CONFIG.responseSpeed,
               }},
             }},
           }},
@@ -1102,6 +1203,7 @@ def _build_realtime_component(
           currentUserBubble = ensureBubble("user", text);
         }}
         updateBubble(currentUserBubble, text.trim());
+        pushTranscriptTurn("user", text.trim());
         currentUserText = "";
         currentUserBubble = null;
       }}
@@ -1117,8 +1219,88 @@ def _build_realtime_component(
           currentAssistantBubble = ensureBubble("assistant", text);
         }}
         updateBubble(currentAssistantBubble, text.trim());
+        pushTranscriptTurn("assistant", text.trim());
         currentAssistantText = "";
         currentAssistantFinalized = true;
+      }}
+
+      function buildTranscriptPayload() {{
+        const turns = [...transcriptTurns];
+        const pendingUser = (currentUserText || "").trim();
+        const pendingAssistant = (currentAssistantText || "").trim();
+
+        if (pendingUser) {{
+          turns.push({{ role: "user", content: pendingUser }});
+        }}
+        if (pendingAssistant) {{
+          turns.push({{ role: "assistant", content: pendingAssistant }});
+        }}
+
+        const transcript = turns
+          .map((turn) => `${{turn.role === "assistant" ? "Lucie" : "User"}}: ${{turn.content}}`)
+          .join("\\n\\n")
+          .trim();
+
+        return {{
+          action: "save_memory",
+          transcript,
+          started_at: sessionStartedAt,
+          ended_at: new Date().toISOString(),
+          turn_count: turns.length,
+        }};
+      }}
+
+      function pushMemoryPayloadToStreamlit(payload) {{
+        const parentDoc = window.parent && window.parent.document;
+        if (!parentDoc) {{
+          throw new Error("Streamlit bridge is not available.");
+        }}
+
+        const bridgeTextarea = parentDoc.querySelector('textarea[aria-label="{MEMORY_PAYLOAD_LABEL}"]');
+        const bridgeButton = Array.from(parentDoc.querySelectorAll("button")).find(
+          (button) => button.textContent && button.textContent.trim() === "{SAVE_MEMORY_BUTTON_LABEL}"
+        );
+
+        if (!bridgeTextarea || !bridgeButton) {{
+          throw new Error("Could not find the hidden Streamlit memory controls.");
+        }}
+
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+        setter.call(bridgeTextarea, JSON.stringify(payload));
+        bridgeTextarea.dispatchEvent(new Event("input", {{ bubbles: true }}));
+        bridgeTextarea.dispatchEvent(new Event("change", {{ bubbles: true }}));
+        bridgeButton.click();
+      }}
+
+      function saveConversationMemory() {{
+        if (saveInFlight) {{
+          return;
+        }}
+
+        const payload = buildTranscriptPayload();
+        if (!payload.transcript) {{
+          addSystemBubble("There is no finished conversation to save yet.");
+          stampEvent("No memory to save");
+          return;
+        }}
+
+        saveInFlight = true;
+        setControls();
+        stampEvent("Saving personal memory");
+
+        try {{
+          pushMemoryPayloadToStreamlit(payload);
+          stopSession({{
+            preserveTimeline: true,
+            systemMessage: "Conversation ended. Saving personal context for next time.",
+          }});
+        }} catch (err) {{
+          console.error(err);
+          saveInFlight = false;
+          setControls();
+          addSystemBubble(`Could not save memory: ${{String(err).slice(0, 220)}}`);
+          stampEvent("Memory save failed");
+        }}
       }}
 
       function extractAssistantText(response) {{
@@ -1286,13 +1468,16 @@ def _build_realtime_component(
       function clearTranscript() {{
         timeline.innerHTML = "";
         placeholder.style.display = "block";
+        transcriptTurns = [];
         currentAssistantBubble = null;
         currentUserBubble = null;
         currentAssistantText = "";
         currentUserText = "";
         currentAssistantFinalized = false;
         lastAssistantItemId = null;
+        saveInFlight = false;
         stampEvent("Transcript cleared");
+        setControls();
       }}
 
       function stopSession(options = {{}}) {{
@@ -1341,6 +1526,7 @@ def _build_realtime_component(
         currentAssistantText = "";
         currentUserText = "";
         currentAssistantFinalized = false;
+        saveInFlight = false;
         setControls();
         setUIState(
           "idle",
@@ -1368,8 +1554,10 @@ def _build_realtime_component(
 
       connectBtn.addEventListener("click", startSession);
       hangupBtn.addEventListener("click", () => stopSession());
+      saveBtn.addEventListener("click", saveConversationMemory);
       clearBtn.addEventListener("click", clearTranscript);
 
+      hideBridgeControls();
       setControls();
     </script>
   </body>
@@ -1381,6 +1569,9 @@ st.title("🎙️ Speak In French")
 st.caption("A more natural space to practise speaking, listening, and thinking out loud in French.")
 
 api_key = os.getenv("OPENAI_API_KEY", "")
+memory_store = load_memory_store()
+profile_defaults = memory_store["profile"]
+cached_context = load_live_context_cache()
 
 with st.expander("Settings", expanded=not bool(api_key)):
     api_key_input = st.text_input(
@@ -1403,7 +1594,52 @@ with st.expander("Settings", expanded=not bool(api_key)):
         "Conversation instructions",
         value=DEFAULT_PROMPT,
         height=240,
-        help="Use this to shape Lucie's teaching style and tone.",
+        help="Use this to shape Lucie's teaching style, tone, and speaking pace.",
+    )
+
+    st.markdown("##### About you")
+    display_name = st.text_input(
+        "Name or what Lucie should call you",
+        value=profile_defaults.get("display_name", ""),
+        help="Optional. This is stable personal context, not a teaching preference.",
+    )
+
+    location = st.text_input(
+        "Places that matter in your life",
+        value=profile_defaults.get("location", ""),
+        help="Examples: where you live, countries you know well, or places you often talk about.",
+    )
+
+    background = st.text_area(
+        "Work, studies, or background",
+        value=profile_defaults.get("background", ""),
+        height=90,
+        help="Only include the parts you want Lucie to remember over time.",
+    )
+
+    interests = st.text_area(
+        "Hobbies and recurring interests",
+        value=profile_defaults.get("interests", ""),
+        height=90,
+    )
+
+    lifestyle = st.text_area(
+        "Family, lifestyle, or recurring life context",
+        value=profile_defaults.get("lifestyle", ""),
+        height=90,
+    )
+
+    french_goals = st.text_area(
+        "Current French-learning goals",
+        value=profile_defaults.get("french_goals", ""),
+        height=90,
+    )
+
+    extra_context = st.text_area(
+        "Anything else Lucie should know about you",
+        value=profile_defaults.get("extra_context", ""),
+        height=90,
+        help="Use this for durable personal context, not correction-style instructions.",
     )
 
     st.markdown("##### Current topics")
@@ -1434,6 +1670,38 @@ with st.expander("Settings", expanded=not bool(api_key)):
         help="Lucie will look for topics from within this recent window.",
     )
 
+    topic_refresh_mode = st.radio(
+        "Topic prep mode",
+        ("Use last researched topics", "Research new topics"),
+        index=0,
+        help="Reuse the most recent saved topic bundle for these settings, or trigger a fresh search before the conversation starts.",
+    )
+
+    if cached_context:
+        cached_at = cached_context.get("cached_at", "")
+        cached_topics = cached_context.get("topics", [])
+        st.markdown("##### Last researched topics")
+        if cached_at:
+            st.caption(f"Cached on `{cached_at}` in `{TOPIC_CACHE_PATH}`.")
+        if cached_topics:
+            for index, topic in enumerate(cached_topics, start=1):
+                st.markdown(f"**{index}. {topic['title_fr']}**  \n{topic['summary_fr']}")
+        else:
+            st.caption("The cache file exists, but no usable topics were found in it.")
+    else:
+        st.caption("No saved topic cache yet. Lucie will research new topics the first time you prepare a session.")
+
+profile_payload = _build_profile_payload(
+    display_name=display_name,
+    location=location,
+    background=background,
+    interests=interests,
+    lifestyle=lifestyle,
+    french_goals=french_goals,
+    extra_context=extra_context,
+)
+memory_store = update_profile(profile_payload)
+
 col_a, col_b = st.columns([1, 1])
 with col_a:
     refresh_requested = st.button(
@@ -1456,35 +1724,146 @@ if not api_key:
     st.warning("Enter an OpenAI API key above to start the live French speaking page.")
     st.stop()
 
+bridge_payload = st.text_area(
+    MEMORY_PAYLOAD_LABEL,
+    key="voice_realtime_memory_payload",
+    label_visibility="collapsed",
+    height=80,
+)
+bridge_triggered = st.button(
+    SAVE_MEMORY_BUTTON_LABEL,
+    key="voice_realtime_process_memory",
+)
+
+if bridge_triggered:
+    payload = _parse_memory_payload(bridge_payload)
+    last_processed = st.session_state.get("voice_realtime_last_processed_payload", "")
+
+    if not payload:
+        st.session_state["voice_realtime_memory_status"] = (
+            "warning",
+            "The personal-memory payload could not be read, so nothing was saved.",
+        )
+    elif bridge_payload == last_processed:
+        pass
+    else:
+        transcript = str(payload.get("transcript", "") or "").strip()
+        if not transcript:
+            st.session_state["voice_realtime_memory_status"] = (
+                "warning",
+                "There was no finished transcript to save as personal context.",
+            )
+        else:
+            try:
+                extracted_facts = summarize_transcript_to_facts(
+                    api_key,
+                    transcript,
+                    profile=memory_store["profile"],
+                )
+                if extracted_facts:
+                    memory_store = append_learned_facts(extracted_facts)
+                    st.session_state["voice_realtime_memory_status"] = (
+                        "success",
+                        f"Saved {len(extracted_facts)} personal detail"
+                        + ("s" if len(extracted_facts) != 1 else "")
+                        + " for Lucie to remember later.",
+                    )
+                else:
+                    st.session_state["voice_realtime_memory_status"] = (
+                        "info",
+                        "The conversation ended cleanly, but there were no durable personal details worth saving.",
+                    )
+            except Exception as exc:
+                st.session_state["voice_realtime_memory_status"] = (
+                    "warning",
+                    f"Lucie could not save personal context from that conversation: {exc}",
+                )
+
+        st.session_state["voice_realtime_last_processed_payload"] = bridge_payload
+        st.session_state["voice_realtime_memory_payload"] = ""
+
 if refresh_requested:
     st.session_state["voice_realtime_nonce"] = st.session_state.get("voice_realtime_nonce", 0) + 1
 
+memory_status = st.session_state.get("voice_realtime_memory_status")
+if memory_status:
+    level, message = memory_status
+    if level == "success":
+        st.success(message)
+    elif level == "info":
+        st.info(message)
+    else:
+        st.warning(message)
+
+user_context_block = build_user_context_block(
+    memory_store["profile"],
+    memory_store["learned_facts"],
+)
 news_topics: list[dict[str, str]] = []
 weather_summary = ""
-effective_prompt = system_prompt
+effective_prompt = system_prompt if not user_context_block else f"{system_prompt}\n\n{user_context_block}"
 greeting_prompt = (
     "Salue l'utilisateur tres naturellement en francais, puis demande-lui simplement "
     "de quoi il aimerait parler aujourd'hui."
 )
 news_fetch_warning: str | None = None
 weather_fetch_warning: str | None = None
+current_context_params = {
+    "focus_place": focus_place.strip(),
+    "topic_labels": sorted(
+        [str(label).strip() for label in topic_focus if str(label).strip()],
+        key=str.casefold,
+    ),
+    "days_back": int(days_back),
+    "include_weather": bool(include_weather),
+}
 
 try:
     with st.spinner("Preparing your live speaking connection..."):
         try:
-            live_context = _fetch_live_context(
-                api_key,
-                focus_place=focus_place,
-                topic_labels=topic_focus,
-                days_back=days_back,
-                include_weather=include_weather,
+            use_cached_context = (
+                topic_refresh_mode == "Use last researched topics"
+                and cached_context is not None
+                and cached_context.get("params") == current_context_params
             )
+
+            if use_cached_context:
+                live_context = {
+                    "topics": cached_context["topics"],
+                    "weather_summary": cached_context.get("weather_summary", ""),
+                }
+            else:
+                live_context = _fetch_live_context(
+                    api_key,
+                    focus_place=focus_place,
+                    topic_labels=topic_focus,
+                    days_back=days_back,
+                    include_weather=include_weather,
+                )
+                save_live_context_cache(
+                    live_context,
+                    focus_place=focus_place,
+                    topic_labels=topic_focus,
+                    days_back=days_back,
+                    include_weather=include_weather,
+                )
+
             news_topics = live_context["topics"]
             weather_summary = live_context["weather_summary"]
             effective_prompt = f"{system_prompt}\n\n{_build_news_context(news_topics)}"
             greeting_prompt = _build_greeting(news_topics)
             if weather_summary:
                 effective_prompt = f"{effective_prompt}\n\n{_build_weather_context(focus_place, weather_summary)}"
+
+            if topic_refresh_mode == "Use last researched topics" and not use_cached_context:
+                if cached_context is None:
+                    news_fetch_warning = (
+                        "No saved topic cache was found yet, so Lucie researched new topics for this start."
+                    )
+                else:
+                    news_fetch_warning = (
+                        "The saved topics did not match the current topic settings, so Lucie researched new topics instead."
+                    )
         except Exception as exc:
             warning_text = str(exc)
             news_fetch_warning = (
@@ -1535,11 +1914,41 @@ if news_fetch_warning:
 if weather_fetch_warning:
     st.warning(weather_fetch_warning)
 
+with st.expander("What Lucie knows about you", expanded=False):
+    if user_context_block:
+        st.caption(f"Stored locally in `{MEMORY_PATH}` and intended to stay private via `.gitignore`.")
+    else:
+        st.caption("No personal context has been saved yet.")
+
+    profile_labels = {
+        "display_name": "Name",
+        "location": "Places",
+        "background": "Background",
+        "interests": "Interests",
+        "lifestyle": "Lifestyle",
+        "french_goals": "French goals",
+        "extra_context": "Extra context",
+    }
+    for key, label in profile_labels.items():
+        value = memory_store["profile"].get(key, "")
+        if value:
+            st.markdown(f"**{label}:** {value}")
+
+    recent_facts = memory_store["learned_facts"][:5]
+    if recent_facts:
+        st.markdown("**Saved personal details from past conversations**")
+        for fact in recent_facts:
+            st.markdown(f"- {fact['summary']}")
+
 if news_topics:
     with st.expander("Current topics Lucie can use", expanded=False):
         st.caption(
             f"Focus: `{focus_place}` | Topics: `{', '.join(topic_focus) if topic_focus else 'general current affairs'}` | Window: last `{days_back}` days"
         )
+        if topic_refresh_mode == "Use last researched topics" and cached_context:
+            cached_at = cached_context.get("cached_at", "")
+            if cached_at:
+                st.caption(f"Loaded from cache: `{cached_at}` stored in `{TOPIC_CACHE_PATH}`.")
         for index, topic in enumerate(news_topics, start=1):
             st.markdown(f"**{index}. {topic['title_fr']}**  \n{topic['summary_fr']}")
 
