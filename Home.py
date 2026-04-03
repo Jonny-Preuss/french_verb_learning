@@ -8,6 +8,24 @@ st.set_page_config(
 
 
 def render_home() -> None:
+    st.markdown(
+        """
+        <style>
+        .home-shell {
+            max-width: 1100px;
+        }
+
+        .home-shell p,
+        .home-shell li {
+            font-size: 1.05rem;
+            line-height: 1.7;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div class="home-shell">', unsafe_allow_html=True)
     st.title("🇫🇷 French Practice Hub")
     st.write("Choose how you want to practise French from the sidebar.")
 
@@ -19,6 +37,7 @@ def render_home() -> None:
         readme = "\n".join(readme_lines[1:]).lstrip()
 
     st.markdown(readme, unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 navigation = st.navigation(
