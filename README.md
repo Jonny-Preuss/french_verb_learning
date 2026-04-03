@@ -1,6 +1,6 @@
-# 🇫🇷 French Verb Conjugation Trainer
+# 🇫🇷 French Practice Hub
 
-This Streamlit app helps you practice and memorize the conjugations of the 1000 most common French verbs — across various tenses and subject pronouns — in an interactive and gamified way.
+This Streamlit app helps you practise French in a few different ways: drilling verb conjugations, speaking more naturally in guided conversations, and reviewing the mistakes you want to fix next.
 
 ## 📦 Features
 

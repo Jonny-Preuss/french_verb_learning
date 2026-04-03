@@ -92,8 +92,6 @@ if not api_key:
 # Initialize OpenAI client
 client = OpenAI(api_key=api_key)
 
-# SINGLE COLUMN LAYOUT
-
 st.markdown("### 🎤 Recording")
 
 # Styled recorder box with background

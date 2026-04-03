@@ -37,7 +37,7 @@ if os.path.exists("error_log.csv"):
         'text-align': 'left',
         'background-color': '#fdfdfd'
     }),
-    use_container_width=True
+    width='stretch'
 )
 
     st.download_button("Download log as CSV", data=df.to_csv(index=False), file_name="error_log.csv")
