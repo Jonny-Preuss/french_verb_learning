@@ -20,7 +20,7 @@ Objectif:
 - Aider l'utilisateur a parler francais de maniere fluide et detendue.
 - Prioriser la conversation orale naturelle, pas les explications longues.
 - Corriger seulement les erreurs importantes ou recurrentes, de facon breve et encourageante.
-- Au tout debut, propose trois sujets d'actualite en France ou a Paris et demande lequel l'utilisateur veut choisir.
+- Si un contexte d'actualite recente est fourni, commence par proposer trois sujets tires uniquement de ce contexte et demande lequel l'utilisateur veut choisir.
 
 Style:
 - Parle uniquement en francais sauf si l'utilisateur demande autre chose.
@@ -28,10 +28,7 @@ Style:
 - Pose souvent une question de suivi pour maintenir le rythme.
 - Quand l'utilisateur hesite, aide-le doucement au lieu de changer de sujet.
 - Si l'utilisateur parle d'un verbe ou fait une erreur de conjugaison, integre une mini-correction naturelle dans ta reponse.
-- Pour lancer la conversation, base-toi sur ces trois sujets:
-  1. Le projet d'attentat dejoue a Paris pres d'une banque dans le 8e arrondissement.
-  2. Les municipales de 2026 et les discussions autour de la mairie de Paris.
-  3. Le role international de la France apres l'appel de Macron a un cessez-le-feu au Moyen-Orient.
+- N'invente jamais une actualite recente si aucun contexte recent ne t'a ete fourni.
 """
 
 VOICE_OPTIONS = [
@@ -44,6 +41,219 @@ VOICE_OPTIONS = [
     "shimmer",
     "verse",
 ]
+
+TOPIC_OPTIONS = [
+    "Politics",
+    "Arts and culture",
+    "Sports",
+    "Business and economy",
+    "Science and technology",
+    "Environment",
+    "Society",
+    "Food and lifestyle",
+]
+
+
+def _build_live_context_search_prompt(
+    *,
+    focus_place: str,
+    topic_labels: list[str],
+    days_back: int,
+    include_weather: bool,
+) -> str:
+    topic_text = ", ".join(topic_labels) if topic_labels else "general current affairs"
+    place_text = focus_place.strip() or "France or Paris"
+    weather_block = ""
+    if include_weather:
+        weather_block = f"""
+Also find the current weather for {focus_place.strip() or "Paris, France"}.
+
+Weather rules:
+- Write one short sentence in natural French.
+- Mention the overall conditions and, if available, the current temperature or a close approximation.
+- Keep it under 22 words.
+"""
+    return f"""Find three distinct current news topics about {place_text} from the last {days_back} days that would work well as conversational openers for a French learner.
+
+News rules:
+- Exactly 3 topics.
+- Write the titles and summaries in natural French.
+- Each summary must be one sentence only.
+- Keep each title under 16 words.
+- Keep each summary under 28 words.
+- Focus on topics that are understandable in a conversation setting.
+- Prefer these topic areas when possible: {topic_text}.
+{weather_block}
+Return valid JSON only.
+"""
+
+
+def _extract_response_text(response_data: dict[str, Any]) -> str:
+    output_text = response_data.get("output_text")
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text
+
+    chunks: list[str] = []
+    for item in response_data.get("output", []):
+        if item.get("type") != "message":
+            continue
+        for content in item.get("content", []):
+            text_value = content.get("text")
+            if isinstance(text_value, str) and text_value.strip():
+                chunks.append(text_value)
+    return "\n".join(chunks).strip()
+
+
+def _parse_live_context(raw_text: str) -> dict[str, Any]:
+    cleaned = raw_text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[1]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+    return json.loads(cleaned.strip())
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def _fetch_live_context(
+    api_key: str,
+    *,
+    focus_place: str,
+    topic_labels: list[str],
+    days_back: int,
+    include_weather: bool,
+) -> dict[str, Any]:
+    schema_properties: dict[str, Any] = {
+        "topics": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "title_fr": {"type": "string"},
+                    "summary_fr": {"type": "string"},
+                },
+                "required": ["title_fr", "summary_fr"],
+            },
+        }
+    }
+    required_fields = ["topics"]
+    if include_weather:
+        schema_properties["weather_fr"] = {"type": "string"}
+        required_fields.append("weather_fr")
+
+    response = requests.post(
+        "https://api.openai.com/v1/responses",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": "gpt-4.1-mini",
+            "tools": [
+                {
+                    "type": "web_search",
+                    "user_location": {
+                        "type": "approximate",
+                        "country": "FR",
+                        "city": "Paris",
+                        "region": "Ile-de-France",
+                    },
+                }
+            ],
+            "tool_choice": "required",
+            "input": _build_live_context_search_prompt(
+                focus_place=focus_place,
+                topic_labels=topic_labels,
+                days_back=days_back,
+                include_weather=include_weather,
+            ),
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "live_practice_context",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": schema_properties,
+                        "required": required_fields,
+                    },
+                }
+            },
+        },
+        timeout=40,
+    )
+
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise RuntimeError("Could not decode the live practice context response.") from exc
+
+    if response.status_code >= 400:
+        message = data.get("error", {}).get("message") if isinstance(data, dict) else None
+        raise RuntimeError(message or "Could not fetch live practice context.")
+
+    raw_text = _extract_response_text(data)
+    if not raw_text:
+        raise RuntimeError("The live practice search returned no usable text.")
+
+    payload = _parse_live_context(raw_text)
+    topics = []
+    for topic in payload.get("topics", [])[:3]:
+        title = str(topic.get("title_fr", "")).strip()
+        summary = str(topic.get("summary_fr", "")).strip()
+        if title and summary:
+            topics.append({"title_fr": title, "summary_fr": summary})
+    if len(topics) != 3:
+        raise RuntimeError("The news search did not return exactly three usable topics.")
+
+    weather_summary = str(payload.get("weather_fr", "")).strip() if include_weather else ""
+    if include_weather and not weather_summary:
+        raise RuntimeError("The weather search did not return a usable weather summary.")
+
+    return {
+        "topics": topics,
+        "weather_summary": weather_summary,
+    }
+
+
+def _build_news_context(topics: list[dict[str, str]]) -> str:
+    lines = [
+        "Contexte d'actualite recente pour commencer la conversation.",
+        "Utilise uniquement ces sujets comme base pour l'ouverture si l'utilisateur veut parler d'actualite.",
+    ]
+    for index, topic in enumerate(topics, start=1):
+        lines.append(f"{index}. {topic['title_fr']} - {topic['summary_fr']}")
+    return "\n".join(lines)
+
+
+def _build_weather_context(focus_place: str, weather_summary: str) -> str:
+    return (
+        "Contexte meteo actuel pour la conversation.\n"
+        f"Lieu: {focus_place.strip() or 'Paris, France'}.\n"
+        f"Meteo: {weather_summary}"
+    )
+
+
+def _build_greeting(topics: list[dict[str, str]]) -> str:
+    if len(topics) != 3:
+        return (
+            "Salue l'utilisateur tres naturellement en francais, puis demande-lui simplement "
+            "de quoi il aimerait parler aujourd'hui."
+        )
+
+    topic_lines = "\n".join(
+        f"{index}. {topic['title_fr']} - {topic['summary_fr']}"
+        for index, topic in enumerate(topics, start=1)
+    )
+    return (
+        "Salue l'utilisateur tres naturellement en francais, puis propose exactement ces trois "
+        "sujets d'actualite en une formulation simple et orale. Ne rajoute pas d'autres sujets. "
+        "Termine en demandant lequel il prefere.\n"
+        f"{topic_lines}"
+    )
 
 
 def _mint_realtime_client_secret(
@@ -109,6 +319,7 @@ def _build_realtime_component(
     client_secret: str,
     voice: str,
     instructions: str,
+    greeting: str,
 ) -> str:
     config_json = json.dumps(
         {
@@ -116,13 +327,7 @@ def _build_realtime_component(
             "voice": voice,
             "instructions": instructions,
             "model": "gpt-realtime",
-            "greeting": (
-                "Salue l'utilisateur tres naturellement en francais, puis propose exactement trois sujets "
-                "d'actualite en France ou a Paris: 1) le projet d'attentat dejoue dans le 8e arrondissement "
-                "de Paris, 2) les municipales de 2026 et la course a la mairie de Paris, 3) le role "
-                "international de la France apres l'appel de Macron a un cessez-le-feu au Moyen-Orient. "
-                "Presente-les tres brievement, puis demande lequel l'utilisateur prefere."
-            ),
+            "greeting": greeting,
         }
     )
 
@@ -856,7 +1061,6 @@ def _build_realtime_component(
           session: {{
             type: "realtime",
             model: CONFIG.model,
-            instructions: CONFIG.instructions,
             output_modalities: ["audio"],
             audio: {{
               input: {{
@@ -1202,6 +1406,34 @@ with st.expander("Settings", expanded=not bool(api_key)):
         help="Use this to shape Lucie's teaching style and tone.",
     )
 
+    st.markdown("##### Current topics")
+    topic_focus = st.multiselect(
+        "Topic areas",
+        TOPIC_OPTIONS,
+        # default=["Politics", "Arts and culture", "Sports"],
+        help="Guide what kind of current topics Lucie should retrieve before the conversation starts.",
+    )
+
+    focus_place = st.text_input(
+        "Place to focus on",
+        value="Paris, France",
+        help="Examples: `Paris, France`, `Marseille, France`, `Belgium`, `Berlin, Germany`.",
+    )
+
+    include_weather = st.checkbox(
+        "Let Lucie know the current weather for this place",
+        value=True,
+        help="When enabled, the prep step also fetches a short current weather note for the selected place.",
+    )
+
+    days_back = st.slider(
+        "How recent should the topics be (in days)?",
+        min_value=1,
+        max_value=14,
+        value=7,
+        help="Lucie will look for topics from within this recent window.",
+    )
+
 col_a, col_b = st.columns([1, 1])
 with col_a:
     refresh_requested = st.button(
@@ -1227,12 +1459,48 @@ if not api_key:
 if refresh_requested:
     st.session_state["voice_realtime_nonce"] = st.session_state.get("voice_realtime_nonce", 0) + 1
 
+news_topics: list[dict[str, str]] = []
+weather_summary = ""
+effective_prompt = system_prompt
+greeting_prompt = (
+    "Salue l'utilisateur tres naturellement en francais, puis demande-lui simplement "
+    "de quoi il aimerait parler aujourd'hui."
+)
+news_fetch_warning: str | None = None
+weather_fetch_warning: str | None = None
+
 try:
     with st.spinner("Preparing your live speaking connection..."):
+        try:
+            live_context = _fetch_live_context(
+                api_key,
+                focus_place=focus_place,
+                topic_labels=topic_focus,
+                days_back=days_back,
+                include_weather=include_weather,
+            )
+            news_topics = live_context["topics"]
+            weather_summary = live_context["weather_summary"]
+            effective_prompt = f"{system_prompt}\n\n{_build_news_context(news_topics)}"
+            greeting_prompt = _build_greeting(news_topics)
+            if weather_summary:
+                effective_prompt = f"{effective_prompt}\n\n{_build_weather_context(focus_place, weather_summary)}"
+        except Exception as exc:
+            warning_text = str(exc)
+            news_fetch_warning = (
+                "Current prep could not be refreshed, so Lucie will start without live topics"
+                + (" or weather" if include_weather else "")
+                + f": {warning_text}"
+            )
+            if include_weather:
+                weather_fetch_warning = (
+                    "Current weather could not be refreshed, so Lucie will start without a live weather note: "
+                    f"{warning_text}"
+                )
         token_payload = _mint_realtime_client_secret(
             api_key,
             voice=selected_voice,
-            instructions=system_prompt,
+            instructions=effective_prompt,
         )
 except Exception as exc:
     st.error(f"Could not prepare the live speaking connection: {exc}")
@@ -1261,11 +1529,29 @@ meta_cols[2].metric("Connection", "ready" if client_secret else "missing")
 if expires_at:
     st.caption(f"If starting fails, prepare the connection again and retry. Token expiry: `{expires_at}`.")
 
+if news_fetch_warning:
+    st.warning(news_fetch_warning)
+
+if weather_fetch_warning:
+    st.warning(weather_fetch_warning)
+
+if news_topics:
+    with st.expander("Current topics Lucie can use", expanded=False):
+        st.caption(
+            f"Focus: `{focus_place}` | Topics: `{', '.join(topic_focus) if topic_focus else 'general current affairs'}` | Window: last `{days_back}` days"
+        )
+        for index, topic in enumerate(news_topics, start=1):
+            st.markdown(f"**{index}. {topic['title_fr']}**  \n{topic['summary_fr']}")
+
+if weather_summary:
+    st.caption(f"Current weather for `{focus_place}`: {weather_summary}")
+
 components.html(
     _build_realtime_component(
         client_secret=client_secret,
         voice=selected_voice,
-        instructions=system_prompt,
+        instructions=effective_prompt,
+        greeting=greeting_prompt,
     ),
     height=760,
     scrolling=False,
