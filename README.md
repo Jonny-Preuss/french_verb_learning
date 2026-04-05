@@ -17,6 +17,7 @@ This Streamlit app helps you practise French in a few different ways: drilling v
 - Error-tracking log for a quick review of (repeated) mistakes
 - Not use the English translation as an input, but use it for an expandable field that shows the translation so you can also practice your vocabulary 
 - Set possible filters upfront (e.g. only verbs of the 1st/2nd/3rd group, specific tenses, ...)
+- Review Duolingo screenshots into a vocabulary inbox, correct the extracted French/English card once, and save approved study items in SQLite
 
 
 ## 📁 Project Structure
@@ -56,6 +57,7 @@ french_verb_learning/ <br>
 
 - Request example sentences per tense/subject/verb to better imagine the verb in use (practice LLM calling with a pre-defined prompt on a free tier)
 - Web-based correctness checking via Le Conjugueur or Reverso (practice agentic tool-use features)
+- Export approved vocabulary items into a dedicated spaced-repetition or flashcard workflow
 
 ## 📚 License
 

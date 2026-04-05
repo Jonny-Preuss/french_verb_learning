@@ -2,42 +2,282 @@ import streamlit as st
 from src import config as con
 from src import load_data as load
 from src import select_input as input
-from src.session import init_session_state 
+from src.session import init_session_state
 from src.checking import check_user_input
 from src.logging_attempts import log_incorrect_attempt
-from openpyxl.styles import PatternFill
-from datetime import datetime
 import pandas as pd
 import os
+from html import escape
 
 
 # --- COLOUR SCHEME & STYLE --------
-# st.set_page_config(layout="wide")
 st.markdown("""
     <style>
+    .conjugation-shell {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding-bottom: 2rem;
+    }
+
+    .hero-card {
+        background:
+            radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 32%),
+            linear-gradient(135deg, #fffdf7 0%, #ffffff 48%, #f3f8ff 100%);
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        border-radius: 26px;
+        padding: 1.6rem 1.75rem;
+        box-shadow: 0 22px 50px rgba(15, 23, 42, 0.08);
+        margin: 0.35rem 0 1.2rem;
+    }
+
+    .hero-eyebrow {
+        display: inline-block;
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #1d4ed8;
+        background: rgba(219, 234, 254, 0.88);
+        border-radius: 999px;
+        padding: 0.35rem 0.7rem;
+        margin-bottom: 0.95rem;
+    }
+
+    .hero-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.7fr) minmax(240px, 1fr);
+        gap: 1rem;
+        align-items: start;
+    }
+
+    .hero-title {
+        font-size: clamp(2rem, 3vw, 2.8rem);
+        line-height: 1.05;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0 0 0.45rem;
+    }
+
+    .hero-prompt {
+        font-size: 1.12rem;
+        color: #334155;
+        margin: 0;
+        line-height: 1.65;
+    }
+
+    .hero-prompt strong {
+        color: #0f172a;
+    }
+
+    .hero-meta {
+        display: grid;
+        gap: 0.75rem;
+    }
+
+    .metric-card {
+        background: rgba(255, 255, 255, 0.86);
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 18px;
+        padding: 0.9rem 1rem;
+    }
+
+    .metric-label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #64748b;
+        margin-bottom: 0.3rem;
+        font-weight: 700;
+    }
+
+    .metric-value {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+
+    .practice-card {
+        background: #ffffff;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 22px;
+        padding: 1.35rem;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+        margin-bottom: 1rem;
+    }
+
+    .section-kicker {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #64748b;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .section-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 0.2rem;
+    }
+
+    .section-copy {
+        color: #475569;
+        margin-bottom: 0;
+    }
+
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.65rem;
+        padding: 0.3rem;
+        background: rgba(241, 245, 249, 0.85);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 999px;
+        width: fit-content;
+        margin-bottom: 1rem;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        height: auto;
+        border-radius: 999px;
+        padding: 0.6rem 1rem;
+        font-weight: 700;
+        color: #475569;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #2563eb 0%, #0f766e 100%);
+        color: #ffffff !important;
+        box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24);
+    }
+
     div.stButton > button {
-        background-color: #f0f0f0 !important;
-        color: black !important;
-        border: 1px solid #ccc !important;
-        padding: 0.5em 1.2em !important;
-        border-radius: 6px !important;
+        border: none !important;
+        border-radius: 14px !important;
+        padding: 0.72rem 1.15rem !important;
         font-size: 1rem !important;
+        font-weight: 700 !important;
+        color: #ffffff !important;
+        background: linear-gradient(135deg, #2563eb 0%, #0f766e 100%) !important;
+        box-shadow: 0 12px 22px rgba(37, 99, 235, 0.22) !important;
+        transition: transform 0.18s ease, box-shadow 0.18s ease !important;
     }
 
     div.stButton > button:hover {
-        background-color: #d6e4ff !important;  /* light blue */
-        color: black !important;
-        border-color: #a0c4ff !important;
+        transform: translateY(-1px);
+        box-shadow: 0 16px 28px rgba(37, 99, 235, 0.28) !important;
+    }
+
+    div.stTextInput input {
+        border-radius: 16px !important;
+        border: 1px solid rgba(148, 163, 184, 0.45) !important;
+        background: #f8fafc !important;
+        padding: 0.8rem 0.95rem !important;
+        font-size: 1rem !important;
+    }
+
+    div.stTextInput input:focus {
+        border-color: #2563eb !important;
+        box-shadow: 0 0 0 0.18rem rgba(37, 99, 235, 0.14) !important;
+    }
+
+    [data-testid="stExpander"] {
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 18px;
+        overflow: hidden;
+    }
+
+    @media (max-width: 900px) {
+        .hero-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .hero-card,
+        .practice-card {
+            padding: 1.1rem;
+        }
     }
     </style>
 """, unsafe_allow_html=True)
+
+
+def render_page_intro() -> None:
+    st.markdown(
+        """
+        <div class="conjugation-shell">
+            <div class="section-kicker">Conjugation Studio</div>
+            <div class="section-title">Train one verb form at a time with clearer visual focus.</div>
+            <p class="section-copy">
+                Filter by tense or verb group, answer from memory, then move straight to the next prompt.
+            </p>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_practice_hero(verb: str, prompt: str, translation: str, attempts: int) -> None:
+    prompt_parts = prompt.split(" — ", maxsplit=1)
+    tense = escape(prompt_parts[0] if prompt_parts else prompt)
+    subject = escape(prompt_parts[1] if len(prompt_parts) > 1 else "Mixed pronoun")
+    safe_verb = escape(verb)
+    safe_translation = escape(translation)
+
+    st.markdown(
+        f"""
+        <div class="hero-card">
+            <div class="hero-grid">
+                <div>
+                    <div class="hero-eyebrow">Current Drill</div>
+                    <div class="hero-title">{safe_verb}</div>
+                    <p class="hero-prompt">
+                        Conjugate in <strong>{tense}</strong> for <strong>{subject}</strong>.
+                    </p>
+                </div>
+                <div class="hero-meta">
+                    <div class="metric-card">
+                        <div class="metric-label">English Meaning</div>
+                        <div class="metric-value">{safe_translation}</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Attempts On This Prompt</div>
+                        <div class="metric-value">{attempts}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_mistakes_log(log_path: str = "error_log.csv") -> None:
+    st.subheader("📉 Mistakes Log")
+
+    if os.path.exists(log_path):
+        df = pd.read_csv(log_path)
+        st.dataframe(
+            df.style.set_properties(
+                **{
+                    "text-align": "left",
+                    "background-color": "#fdfdfd",
+                }
+            ),
+            width="stretch",
+        )
+        st.download_button(
+            "Download log as CSV",
+            data=df.to_csv(index=False),
+            file_name="error_log.csv",
+        )
+    else:
+        st.info("No mistakes logged yet. Perfect streak! 🥳")
+
 
 # --------- MAIN APP ---------
 init_session_state()
 
 
 # --------- APP TITLE ---------
-st.title("🇫🇷 French Verb Conjugation Trainer")
+render_page_intro()
 
 
 # --------- LOAD WORKBOOK ---------
@@ -116,70 +356,98 @@ if verb != st.session_state.last_verb:
     st.session_state.reset_input = True
     st.session_state.last_verb = verb
 
-# --------- UI + LOGIC ---------
-if row is None:
-    st.success("🎉 All verbs have been completed!")
-else:
-    st.subheader(f"Verb: **{verb}**")
-    st.write(f"Conjugate for: **{prompt}**")
+practice_tab, mistakes_tab = st.tabs(["Practice", "Mistakes Log"])
 
-    tense = ws_solution[f"{col}1"].value
-    subject = ws_solution[f"{col}2"].value
-    # translation = ws_solution[f"{con.TRANSLATION_COL}"].value
-    print(translation)
+with practice_tab:
+    # --------- UI + LOGIC ---------
+    if row is None:
+        st.success("🎉 All verbs have been completed!")
+    else:
+        tense = ws_solution[f"{col}1"].value
+        subject = ws_solution[f"{col}2"].value
 
-    # Show translation
-    with st.expander("📘 Translation", expanded=False):
-        st.markdown(f"**{translation}**")
+        render_practice_hero(verb, prompt, translation, st.session_state.attempts)
 
-    # Show plotly diagram of tense and personal pronoun    
-    input.show_conjugation_position(tense, subject)
+        st.markdown(
+            """
+            <div class="practice-card">
+                <div class="section-kicker">Answer Zone</div>
+                <div class="section-title">Write the conjugated form from memory.</div>
+                <p class="section-copy">
+                    Use the tense and pronoun guides below if you need a quick orientation.
+                </p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    # Show user input field
-    user_input = st.text_input("Your conjugation:", key=f"user_input_{verb}")
+        input.show_conjugation_position(tense, subject)
 
+        user_input = st.text_input("Your conjugation:", key=f"user_input_{verb}")
 
-    if st.button("Check answer"):
-        st.session_state.attempts += 1
-        
-        # Fetch the correct answer from the solution sheet
-        correct_answer = str(ws_solution[f"{col}{row}"].value).strip()
+        action_col, next_col = st.columns([1.3, 1])
+        with action_col:
+            check_answer = st.button("Check answer")
+        with next_col:
+            next_verb = st.button("Next verb")
 
-        # Save user input to the input sheet
-        cell = ws_input[f"{col}{row}"] # TODO: Check correct cell referencing for UserInput sheet
+        if check_answer:
+            next_attempt = st.session_state.attempts + 1
+            st.session_state.attempts = next_attempt
 
-        is_correct, cleaned_input = check_user_input(user_input, correct_answer, cell)
+            correct_answer = str(ws_solution[f"{col}{row}"].value).strip()
 
-        # Compare and apply style
-        if is_correct:
-            st.success("✅ Correct!")
-            st.session_state.attempts = 0
-            st.session_state.reset_input = True
-            
+            cell = ws_input[f"{col}{row}"]
 
-        else:
-            st.error(f"❌ Incorrect. Try again or reveal answer.")
-            if st.session_state.attempts >= 1:
-                with st.expander("📖 Show correct answer"):
-                    st.markdown(f"**Correct answer:** `{correct_answer}`")
+            is_correct, cleaned_input = check_user_input(user_input, correct_answer, cell)
 
-            # TODO: Retrying incorrect tries empties the input cell, but here we would want to keep it
-            log_incorrect_attempt(verb, tense, subject, user_input, correct_answer, log_path="error_log.csv")
+            if is_correct:
+                st.success("✅ Correct!")
+                st.session_state.attempts = 0
+                st.session_state.reset_input = True
+            else:
+                st.error("❌ Incorrect. Try again or reveal answer.")
+                if next_attempt >= 1:
+                    with st.expander("📖 Show correct answer"):
+                        st.markdown(f"**Correct answer:** `{correct_answer}`")
 
-        # Check if full row is complete
-        filled = all(ws_input[f"{c}{row}"].value not in [None, ""] for c in con.CONJUGATION_COLS)
-        if filled:
-            ws_input[f"{con.STATUS_COL}{row}"].value = "True"
+                log_incorrect_attempt(
+                    verb,
+                    tense,
+                    subject,
+                    user_input,
+                    correct_answer,
+                    log_path="error_log.csv",
+                )
 
-        wb.save(con.EXCEL_FILE)
+            filled = all(ws_input[f"{c}{row}"].value not in [None, ""] for c in con.CONJUGATION_COLS)
+            if filled:
+                ws_input[f"{con.STATUS_COL}{row}"].value = "True"
 
-        # # ✅ Clear the input field AFTER saving and feedback
-        st.session_state.clear_input = True
+            wb.save(con.EXCEL_FILE)
+            st.session_state.clear_input = True
 
-if st.button("Next verb"):
-    st.session_state.pop("current_task", None)
-    st.session_state.reset_input = True  # ✅ sets flag
-    st.rerun()
+    if row is not None and next_verb:
+        st.session_state.pop("current_task", None)
+        st.session_state.reset_input = True
+        st.rerun()
+
+with mistakes_tab:
+    st.markdown(
+        """
+        <div class="practice-card">
+            <div class="section-kicker">Review Queue</div>
+            <div class="section-title">Keep an eye on the forms that still need work.</div>
+            <p class="section-copy">
+                Use this log to spot recurring trouble tenses and download your mistakes for later review.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    render_mistakes_log()
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 
 # TODO: Allow accent's to be omitted for the word to be correct? (e.g. with unidecode library)

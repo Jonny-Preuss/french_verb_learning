@@ -45,7 +45,8 @@ navigation = st.navigation(
         st.Page(render_home, title="Home", icon="🏠", default=True),
         st.Page("pages/01_Conjugations.py", title="Conjugations", icon="📘"),
         st.Page("pages/02_Voice_Realtime.py", title="Speak In French", icon="🎙️"),
-        st.Page("pages/03_Error_Logging.py", title="Mistakes Log", icon="📉"),
+        st.Page("pages/04_Vocabulary_Review.py", title="Vocabulary Inbox", icon="🗂️"),
+        st.Page("pages/05_Vocabulary_Practice.py", title="Vocabulary Practice", icon="📝"),
     ],
     position="sidebar",
 )
