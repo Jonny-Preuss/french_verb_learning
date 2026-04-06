@@ -178,3 +178,8 @@ cython_debug/
 
 # Local-only personal memory for the realtime voice page
 data/private/
+
+# Data
+*.jpeg
+*.xlsx
+*.csv
