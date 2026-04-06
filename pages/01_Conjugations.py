@@ -19,6 +19,13 @@ st.markdown("""
         padding-bottom: 2rem;
     }
 
+    .intro-shell {
+        width: auto;
+        margin: 0 0 1.25rem;
+        padding-bottom: 0.25rem;
+        text-align: left;
+    }
+
     .hero-card {
         background:
             radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 32%),
@@ -114,16 +121,39 @@ st.markdown("""
         margin-bottom: 0.25rem;
     }
 
-    .section-title {
-        font-size: 1.2rem;
+    .intro-kicker {
+        display: inline-block;
+        font-size: 0.76rem;
         font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #1d4ed8;
+        background: rgba(219, 234, 254, 0.88);
+        border-radius: 999px;
+        padding: 0.35rem 0.7rem;
+        margin-bottom: 0.85rem;
+    }
+
+    .section-title {
+        font-size: clamp(1.75rem, 2.6vw, 2.25rem);
+        line-height: 1.06;
+        font-weight: 800;
         color: #0f172a;
-        margin-bottom: 0.2rem;
+        margin-bottom: 0.4rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .section-copy {
+        font-size: 0.96rem;
         color: #475569;
         margin-bottom: 0;
+        line-height: 1.55;
+        max-width: none;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .stTabs [data-baseweb="tab-list"] {
@@ -203,8 +233,8 @@ st.markdown("""
 def render_page_intro() -> None:
     st.markdown(
         """
-        <div class="conjugation-shell">
-            <div class="section-kicker">Conjugation Studio</div>
+        <div class="intro-shell">
+            <div class="intro-kicker">Conjugation Studio</div>
             <div class="section-title">Train one verb form at a time with clearer visual focus.</div>
             <p class="section-copy">
                 Filter by tense or verb group, answer from memory, then move straight to the next prompt.

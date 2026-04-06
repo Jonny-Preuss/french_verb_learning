@@ -77,6 +77,119 @@ MEMORY_PAYLOAD_LABEL = "Voice realtime memory payload bridge"
 SAVE_MEMORY_BUTTON_LABEL = "Voice realtime process memory"
 
 
+st.markdown(
+    """
+    <style>
+    .voice-shell {
+        max-width: 1120px;
+        margin: 0;
+        padding-bottom: 1.5rem;
+    }
+
+    .voice-intro {
+        width: auto;
+        margin: 0 0 1.25rem;
+        padding-bottom: 0.25rem;
+        text-align: left;
+    }
+
+    .voice-kicker {
+        display: inline-block;
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #1d4ed8;
+        background: rgba(219, 234, 254, 0.88);
+        border-radius: 999px;
+        padding: 0.35rem 0.7rem;
+        margin-bottom: 0.9rem;
+    }
+
+    .voice-title {
+        font-size: clamp(1.65rem, 2.4vw, 2.25rem);
+        line-height: 1.05;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0 0 0.45rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .voice-copy {
+        font-size: 0.96rem;
+        color: #334155;
+        margin: 0;
+        line-height: 1.55;
+        max-width: none;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .voice-copy strong {
+        color: #0f172a;
+    }
+
+    div.stButton > button,
+    div[data-testid="stFormSubmitButton"] button,
+    div[data-testid="stFormSubmitButton"] button[kind="primary"],
+    button[kind="primary"] {
+        border: none !important;
+        border-radius: 14px !important;
+        padding: 0.72rem 1.15rem !important;
+        font-size: 1rem !important;
+        font-weight: 700 !important;
+        color: #ffffff !important;
+        background: linear-gradient(135deg, #2563eb 0%, #0f766e 100%) !important;
+        box-shadow: 0 12px 22px rgba(37, 99, 235, 0.22) !important;
+        transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+    }
+
+    div.stButton > button:hover,
+    div[data-testid="stFormSubmitButton"] button:hover,
+    div[data-testid="stFormSubmitButton"] button[kind="primary"]:hover,
+    button[kind="primary"]:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 16px 28px rgba(37, 99, 235, 0.28) !important;
+    }
+
+    div.stTextInput input,
+    div.stTextArea textarea {
+        border-radius: 16px !important;
+        border: 1px solid rgba(148, 163, 184, 0.45) !important;
+        background: #f8fafc !important;
+        padding: 0.8rem 0.95rem !important;
+        font-size: 1rem !important;
+    }
+
+    div.stTextInput input:focus,
+    div.stTextArea textarea:focus {
+        border-color: #2563eb !important;
+        box-shadow: 0 0 0 0.18rem rgba(37, 99, 235, 0.14) !important;
+    }
+
+    [data-testid="stExpander"] {
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 18px;
+        overflow: hidden;
+    }
+
+    [data-baseweb="select"] {
+        border-radius: 16px;
+    }
+
+    .stSelectbox [data-baseweb="select"] > div {
+        border-radius: 16px;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 def _build_live_context_search_prompt(
     *,
     focus_place: str,
@@ -1567,10 +1680,23 @@ def _build_realtime_component(
 """
 
 
-st.title("🎙️ Speak In French")
-st.caption("A more natural space to practise speaking, listening, and thinking out loud in French.")
+st.markdown(
+    """
+    <div class="voice-shell">
+        <div class="voice-intro">
+            <div class="voice-kicker">Speak In French</div>
+            <div class="voice-title">Practise speaking with a calmer, more natural live conversation flow.</div>
+            <p class="voice-copy">
+                Set the tone, prep the context, and jump into a voice-first conversation that keeps corrections brief,
+                conversational, and memory-aware.
+            </p>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-api_key = os.getenv("OPENAI_API_KEY", "")
+api_key = os.getenv("OPENAI_API_KEY", "") # TODO: CHANGE THIS WHENEVER DEPLOYING!!!
 memory_store = load_memory_store()
 profile_defaults = memory_store["profile"]
 cached_context = load_live_context_cache()
@@ -1725,7 +1851,7 @@ with col_b:
     st.markdown(
         """
         <div style="padding:0.6rem 0;color:#6b7280;font-size:0.95rem;">
-        Recommended flow: prepare the connection, then start speaking in the panel below.
+        Press here to convey your input information to the language teacher (speaking model).
         </div>
         """,
         unsafe_allow_html=True,
