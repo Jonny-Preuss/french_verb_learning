@@ -17,10 +17,16 @@ def get_random_task(ws, selected_filter=None, selected_tenses=None):
             if not filter_value or filter_value.strip() != selected_filter:
                 continue
 
+        # Validate that required fields have values
+        verb = ws[f"{con.VERB_COL}{r}"].value
+        translation = ws[f"{con.TRANSLATION_COL}{r}"].value
+        if not verb or not translation:
+            continue
+
         available_rows.append(r)
 
     if not available_rows:
-        return None, None, None, None
+        return None, None, None, None, None
 
     row = random.choice(available_rows)
     if selected_tenses:
