@@ -36,7 +36,7 @@ def render_home() -> None:
     if readme_lines and readme_lines[0].lstrip().startswith("# "):
         readme = "\n".join(readme_lines[1:]).lstrip()
 
-    st.markdown(readme, unsafe_allow_html=True)
+    st.markdown(readme, unsafe_allow_html=True) 
     st.markdown("</div>", unsafe_allow_html=True)
 
 
